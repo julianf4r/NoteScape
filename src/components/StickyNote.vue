@@ -21,11 +21,12 @@ const emit = defineEmits<{
   duplicate: [];
   front: [];
   context: [event: MouseEvent];
+  editingDone: [];
 }>();
 
 const textarea = ref<HTMLTextAreaElement>();
-const dragStart = ref<{ x: number; y: number; noteX: number; noteY: number }>();
-const resizeStart = ref<{ x: number; y: number; width: number; height: number }>();
+const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
+const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 
 const style = computed(() => ({
@@ -55,7 +56,7 @@ watch(
 function startDrag(event: MouseEvent) {
   if (props.editing || (event.target as HTMLElement).closest(".note-actions, .resize-handle")) return;
   emit("select", event);
-  dragStart.value = { x: event.clientX, y: event.clientY, noteX: props.note.x, noteY: props.note.y };
+  dragStart.value = { x: event.clientX, y: event.clientY, before: { ...props.note } };
   window.addEventListener("mousemove", drag);
   window.addEventListener("mouseup", endDrag, { once: true });
 }
@@ -63,20 +64,22 @@ function startDrag(event: MouseEvent) {
 function drag(event: MouseEvent) {
   if (!dragStart.value) return;
   emit("live", {
-    x: dragStart.value.noteX + (event.clientX - dragStart.value.x) / props.scale,
-    y: dragStart.value.noteY + (event.clientY - dragStart.value.y) / props.scale,
+    x: dragStart.value.before.x + (event.clientX - dragStart.value.x) / props.scale,
+    y: dragStart.value.before.y + (event.clientY - dragStart.value.y) / props.scale,
   });
 }
 
 function endDrag() {
   window.removeEventListener("mousemove", drag);
+  if (dragStart.value) {
+    emit("update", { x: props.note.x, y: props.note.y, __before: dragStart.value.before } as Partial<StickyNote>, true);
+  }
   dragStart.value = undefined;
-  emit("update", { x: props.note.x, y: props.note.y }, true);
 }
 
 function startResize(event: MouseEvent) {
   event.stopPropagation();
-  resizeStart.value = { x: event.clientX, y: event.clientY, width: props.note.width, height: props.note.height };
+  resizeStart.value = { x: event.clientX, y: event.clientY, before: { ...props.note } };
   window.addEventListener("mousemove", resize);
   window.addEventListener("mouseup", endResize, { once: true });
 }
@@ -84,19 +87,22 @@ function startResize(event: MouseEvent) {
 function resize(event: MouseEvent) {
   if (!resizeStart.value) return;
   emit("live", {
-    width: Math.min(800, Math.max(120, resizeStart.value.width + (event.clientX - resizeStart.value.x) / props.scale)),
-    height: Math.min(600, Math.max(100, resizeStart.value.height + (event.clientY - resizeStart.value.y) / props.scale)),
+    width: Math.min(800, Math.max(120, resizeStart.value.before.width + (event.clientX - resizeStart.value.x) / props.scale)),
+    height: Math.min(600, Math.max(100, resizeStart.value.before.height + (event.clientY - resizeStart.value.y) / props.scale)),
   });
 }
 
 function endResize() {
   window.removeEventListener("mousemove", resize);
+  if (resizeStart.value) {
+    emit("update", { width: props.note.width, height: props.note.height, __before: resizeStart.value.before } as Partial<StickyNote>, true);
+  }
   resizeStart.value = undefined;
-  emit("update", { width: props.note.width, height: props.note.height }, true);
 }
 
 function saveEdit() {
-  emit("update", { content: draft.value || "新便签" }, true);
+  emit("update", { content: draft.value }, true);
+  emit("editingDone");
 }
 
 function changeColor(color: NoteColor) {
@@ -122,7 +128,7 @@ function changeColor(color: NoteColor) {
       v-model="draft"
       placeholder="输入内容..."
       @mousedown.stop
-      @keydown.esc.prevent="saveEdit"
+      @keydown.esc.prevent.stop="saveEdit"
       @blur="saveEdit"
     ></textarea>
     <div v-else class="content">{{ props.note.content }}</div>

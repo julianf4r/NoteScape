@@ -4,6 +4,8 @@ import type { HistoryEntry, NoteColor, StickyNote } from "../types";
 
 const now = () => new Date().toISOString();
 const randomRotation = () => Math.round((Math.random() * 4 - 2) * 10) / 10;
+const hasMeaningfulChange = (before: StickyNote, after: StickyNote) =>
+  JSON.stringify({ ...before, updatedAt: undefined }) !== JSON.stringify({ ...after, updatedAt: undefined });
 
 export const useNoteStore = defineStore("note", {
   state: () => ({
@@ -66,7 +68,13 @@ export const useNoteStore = defineStore("note", {
       if (!note) return;
       const before = { ...note };
       Object.assign(note, patch, { updatedAt: now() });
-      if (track) this.addHistory({ type: "update", before, after: { ...note } });
+      if (track && hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
+    },
+    commitNoteChange(before: StickyNote, patch: Partial<StickyNote>) {
+      const note = this.notes.find((item) => item.id === before.id);
+      if (!note) return;
+      Object.assign(note, patch, { updatedAt: now() });
+      if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
     },
     patchNoteLive(id: string, patch: Partial<StickyNote>) {
       const note = this.notes.find((item) => item.id === id);
@@ -103,6 +111,9 @@ export const useNoteStore = defineStore("note", {
     },
     clearSelection() {
       this.selectedIds = [];
+      this.editingId = "";
+    },
+    stopEditing() {
       this.editingId = "";
     },
     undo() {

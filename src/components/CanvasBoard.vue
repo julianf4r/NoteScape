@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
 import CanvasToolbar from "./CanvasToolbar.vue";
 import MiniMap from "./MiniMap.vue";
 import StickyNote from "./StickyNote.vue";
@@ -108,6 +108,7 @@ function stopPan() {
 
 function onBoardMouseDown(event: MouseEvent) {
   contextMenu.value = null;
+  if (noteStore.editingId && (event.target as HTMLElement).classList.contains("canvas-board")) noteStore.stopEditing();
   if ((event.target as HTMLElement).classList.contains("canvas-board")) noteStore.clearSelection();
   startPan(event);
 }
@@ -121,8 +122,10 @@ function openNoteMenu(event: MouseEvent, id: string) {
   contextMenu.value = { x: event.clientX, y: event.clientY, noteId: id };
 }
 
-function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType>, track = true) {
-  noteStore.updateNote(note.id, patch, track);
+function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
+  const { __before, ...cleanPatch } = patch;
+  if (__before) noteStore.commitNoteChange(__before, cleanPatch);
+  else noteStore.updateNote(note.id, cleanPatch, track);
 }
 
 function jumpMiniMap(x: number, y: number) {
@@ -155,8 +158,15 @@ function onKeyup(event: KeyboardEvent) {
   if (event.code === "Space") spaceDown.value = false;
 }
 
-window.addEventListener("keydown", onKeydown);
-window.addEventListener("keyup", onKeyup);
+onMounted(() => {
+  window.addEventListener("keydown", onKeydown);
+  window.addEventListener("keyup", onKeyup);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("keyup", onKeyup);
+});
 </script>
 
 <template>
@@ -189,6 +199,7 @@ window.addEventListener("keyup", onKeyup);
         @duplicate="noteStore.duplicateNote(note.id)"
         @front="noteStore.bringToFront(note.id)"
         @context="(event) => openNoteMenu(event, note.id)"
+        @editing-done="noteStore.stopEditing()"
       />
     </div>
 
