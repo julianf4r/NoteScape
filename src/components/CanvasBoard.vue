@@ -7,7 +7,8 @@ import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
-import type { StickyNote as StickyNoteType, ViewportState } from "../types";
+import type { NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
+import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 
 const canvasStore = useCanvasStore();
@@ -21,6 +22,7 @@ const handActive = ref(false);
 const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
 const contextMenu = ref<{ x: number; y: number; noteId?: string } | null>(null);
+const contextWorld = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
 const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
@@ -124,11 +126,19 @@ function onBoardMouseDown(event: MouseEvent) {
 }
 
 function openCanvasMenu(event: MouseEvent) {
+  if (board.value) {
+    const rect = board.value.getBoundingClientRect();
+    contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
+  }
   contextMenu.value = { x: event.clientX, y: event.clientY };
 }
 
 function openNoteMenu(event: MouseEvent, id: string) {
   noteStore.select(id);
+  if (board.value) {
+    const rect = board.value.getBoundingClientRect();
+    contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
+  }
   contextMenu.value = { x: event.clientX, y: event.clientY, noteId: id };
 }
 
@@ -189,6 +199,17 @@ function updateSelection(note: StickyNoteType, patch: Partial<StickyNoteType> & 
 function toggleTagForSelection(noteId: string, tagId: string) {
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.toggleTagForSelected(tagId);
   else noteStore.toggleTagForNote(noteId, tagId);
+}
+
+function changeColorForContext(noteId: string, color: NoteColor) {
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ color });
+  else noteStore.updateNote(noteId, { color });
+  contextMenu.value = null;
+}
+
+function pasteAtContext() {
+  noteStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
+  contextMenu.value = null;
 }
 
 function startBoxSelect(event: MouseEvent) {
@@ -285,6 +306,13 @@ function onKeydown(event: KeyboardEvent) {
     event.preventDefault();
     resetZoom();
   }
+  if (event.ctrlKey && event.key.toLowerCase() === "v" && canvasStore.currentCanvasId && !noteStore.editingId) {
+    event.preventDefault();
+    const rect = board.value?.getBoundingClientRect();
+    if (!rect) return;
+    const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
+    noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
+  }
 }
 
 function onKeyup(event: KeyboardEvent) {
@@ -360,15 +388,40 @@ onUnmounted(() => {
 
     <MiniMap :notes="visibleNotes" :viewport="viewport" @zoom-in="zoomBy(0.1)" @zoom-out="zoomBy(-0.1)" @fit="fitView" @jump="jumpMiniMap" />
 
-    <div v-if="contextMenu" class="menu-popover" :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }">
+    <div
+      v-if="contextMenu"
+      class="menu-popover"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      @mousedown.stop
+      @click.stop
+      @contextmenu.prevent.stop
+    >
       <template v-if="contextMenu.noteId">
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
         <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制</button>
         <button @click="bringSelectionToFront(contextMenu!.noteId!); contextMenu = null">置顶</button>
         <button @click="deleteSelection(contextMenu!.noteId!); contextMenu = null">删除</button>
+        <div class="context-section">
+          <span>颜色</span>
+          <div class="context-swatches">
+            <button
+              v-for="color in noteColorList"
+              :key="color"
+              :style="{ backgroundColor: noteColors[color] }"
+              @click="changeColorForContext(contextMenu!.noteId!, color)"
+            ></button>
+          </div>
+        </div>
+        <div class="context-section">
+          <span>标签</span>
+          <button v-for="tag in tagStore.tags" :key="tag.id" @click="toggleTagForSelection(contextMenu!.noteId!, tag.id); contextMenu = null">
+            {{ tag.name }}
+          </button>
+        </div>
       </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
+        <button :disabled="!noteStore.clipboard.length" @click="pasteAtContext">粘贴便签</button>
         <button @click="fitView(); contextMenu = null">适应视图</button>
         <button @click="resetZoom(); contextMenu = null">重置缩放</button>
       </template>
@@ -423,5 +476,39 @@ onUnmounted(() => {
   pointer-events: none;
   border: 1px solid rgba(59, 130, 246, 0.85);
   background: rgba(59, 130, 246, 0.12);
+}
+
+.context-section {
+  padding: 6px 4px 4px;
+  border-top: 1px solid #eef1f4;
+}
+
+.context-section > span {
+  display: block;
+  padding: 2px 4px 5px;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.context-swatches {
+  display: grid;
+  grid-template-columns: repeat(4, 24px);
+  gap: 5px;
+  padding: 0 4px 4px;
+}
+
+.context-swatches button {
+  width: 22px;
+  height: 22px;
+  min-height: 22px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 50%;
+}
+
+.menu-popover button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 </style>

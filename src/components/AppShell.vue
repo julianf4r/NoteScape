@@ -41,6 +41,10 @@ function onKeydown(event: KeyboardEvent) {
     if (noteStore.selectedIds.length > 1) noteStore.duplicateSelected();
     else noteStore.duplicateNote(selected);
   }
+  if (event.ctrlKey && event.key.toLowerCase() === "c" && selected && !isEditing) {
+    event.preventDefault();
+    noteStore.copySelected();
+  }
   if (event.ctrlKey && event.key.toLowerCase() === "n" && canvasStore.currentCanvasId) {
     event.preventDefault();
     noteStore.createNote(canvasStore.currentCanvasId, 360, 260, settingsStore.settings.defaultNoteColor, settingsStore.settings.defaultFontSize, settingsStore.settings.randomRotation);
