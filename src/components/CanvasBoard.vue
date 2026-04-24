@@ -21,6 +21,8 @@ const handActive = ref(false);
 const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
 const contextMenu = ref<{ x: number; y: number; noteId?: string } | null>(null);
+const highlightedNoteId = ref("");
+let highlightTimer: number | undefined;
 
 const visibleNotes = computed(() =>
   noteStore.notesForCanvas(canvasStore.currentCanvasId, tagStore.activeTagId, canvasStore.searchQuery),
@@ -135,6 +137,26 @@ function jumpMiniMap(x: number, y: number) {
   viewport.offsetY = rect.height / 2 - y * viewport.scale;
 }
 
+function centerNote(noteId: string) {
+  const note = noteStore.notes.find((item) => item.id === noteId);
+  const rect = board.value?.getBoundingClientRect();
+  if (!note || !rect) return;
+  viewport.offsetX = rect.width / 2 - (note.x + note.width / 2) * viewport.scale;
+  viewport.offsetY = rect.height / 2 - (note.y + note.height / 2) * viewport.scale;
+  noteStore.select(noteId);
+  highlightedNoteId.value = noteId;
+  window.clearTimeout(highlightTimer);
+  highlightTimer = window.setTimeout(() => {
+    highlightedNoteId.value = "";
+  }, 1400);
+}
+
+function onLocateNote(event: Event) {
+  const noteId = (event as CustomEvent<{ noteId: string }>).detail?.noteId;
+  if (!noteId) return;
+  requestAnimationFrame(() => centerNote(noteId));
+}
+
 function onKeydown(event: KeyboardEvent) {
   if (event.code === "Space" && !noteStore.editingId) {
     event.preventDefault();
@@ -161,11 +183,14 @@ function onKeyup(event: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onKeyup);
+  window.addEventListener("locate-note", onLocateNote);
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
+  window.removeEventListener("locate-note", onLocateNote);
+  window.clearTimeout(highlightTimer);
 });
 </script>
 
@@ -192,6 +217,8 @@ onUnmounted(() => {
         :shadow="settingsStore.settings.noteShadow"
         :scale="viewport.scale"
         :tags="tagStore.tags"
+        :search-query="canvasStore.searchQuery"
+        :highlighted="highlightedNoteId === note.id"
         @select="noteStore.select(note.id, $event.shiftKey)"
         @edit="noteStore.editingId = note.id"
         @update="(patch, track) => updateNote(note, patch, track)"

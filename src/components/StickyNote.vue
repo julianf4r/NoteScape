@@ -11,6 +11,8 @@ const props = defineProps<{
   shadow: boolean;
   scale: number;
   tags: TagItem[];
+  searchQuery: string;
+  highlighted: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -31,6 +33,24 @@ const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
+
+const highlightedContent = computed(() => {
+  const query = props.searchQuery.trim();
+  if (!query) return [{ text: props.note.content, match: false }];
+  const lowerContent = props.note.content.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const parts: Array<{ text: string; match: boolean }> = [];
+  let index = 0;
+  let matchIndex = lowerContent.indexOf(lowerQuery);
+  while (matchIndex >= 0) {
+    if (matchIndex > index) parts.push({ text: props.note.content.slice(index, matchIndex), match: false });
+    parts.push({ text: props.note.content.slice(matchIndex, matchIndex + query.length), match: true });
+    index = matchIndex + query.length;
+    matchIndex = lowerContent.indexOf(lowerQuery, index);
+  }
+  if (index < props.note.content.length) parts.push({ text: props.note.content.slice(index), match: false });
+  return parts.length ? parts : [{ text: props.note.content, match: false }];
+});
 
 const style = computed(() => ({
   left: `${props.note.x}px`,
@@ -116,7 +136,7 @@ function changeColor(color: NoteColor) {
 <template>
   <article
     class="sticky-note"
-    :class="[`color-${props.note.color}`, { selected: props.selected, editing: props.editing, noShadow: !props.shadow }]"
+    :class="[`color-${props.note.color}`, { selected: props.selected, editing: props.editing, noShadow: !props.shadow, highlighted: props.highlighted }]"
     :style="style"
     @mousedown.left="startDrag"
     @dblclick.stop="emit('edit')"
@@ -134,7 +154,12 @@ function changeColor(color: NoteColor) {
       @keydown.esc.prevent.stop="saveEdit"
       @blur="saveEdit"
     ></textarea>
-    <div v-else class="content">{{ props.note.content }}</div>
+    <div v-else class="content">
+      <template v-for="(part, index) in highlightedContent" :key="index">
+        <mark v-if="part.match">{{ part.text }}</mark>
+        <template v-else>{{ part.text }}</template>
+      </template>
+    </div>
 
     <div v-if="props.selected && !props.editing" class="note-actions">
       <button title="颜色"><Palette :size="15" /></button>
@@ -184,6 +209,10 @@ function changeColor(color: NoteColor) {
   outline-offset: 3px;
 }
 
+.sticky-note.highlighted {
+  animation: pulse-note 1.4s ease;
+}
+
 .sticky-note:active {
   cursor: grabbing;
 }
@@ -195,6 +224,24 @@ function changeColor(color: NoteColor) {
   overflow: hidden;
   line-height: 1.58;
   font-family: "Segoe Print", "Comic Sans MS", "Microsoft YaHei", cursive;
+}
+
+mark {
+  padding: 0 2px;
+  background: rgba(250, 204, 21, 0.55);
+  border-radius: 3px;
+  color: inherit;
+}
+
+@keyframes pulse-note {
+  0%,
+  100% {
+    outline-color: rgba(59, 130, 246, 0.76);
+  }
+  35% {
+    outline-color: rgba(236, 72, 153, 0.9);
+    box-shadow: 0 16px 30px rgba(59, 130, 246, 0.2), 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
 }
 
 textarea {

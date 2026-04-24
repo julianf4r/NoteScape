@@ -30,7 +30,7 @@ export const useNoteStore = defineStore("note", {
       return this.notes.filter((note) => {
         const canvasMatch = note.canvasId === canvasId;
         const tagMatch = !tagId || note.tags.includes(tagId);
-        const queryMatch = !normalized || note.content.toLowerCase().includes(normalized);
+        const queryMatch = !normalized || note.content.toLowerCase().includes(normalized) || note.title?.toLowerCase().includes(normalized);
         return canvasMatch && tagMatch && queryMatch;
       });
     },

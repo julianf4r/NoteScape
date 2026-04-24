@@ -24,6 +24,20 @@ const filteredCanvases = computed(() => {
   return canvasStore.activeCanvases.filter((canvas) => canvas.name.toLowerCase().includes(query));
 });
 
+const searchResults = computed(() => {
+  const query = canvasStore.searchQuery.trim().toLowerCase();
+  if (!query) return { canvases: [], notes: [], tags: [] };
+  return {
+    canvases: canvasStore.activeCanvases.filter((canvas) => canvas.name.toLowerCase().includes(query)),
+    notes: noteStore.notes.filter((note) => note.content.toLowerCase().includes(query) || note.title?.toLowerCase().includes(query)).slice(0, 12),
+    tags: tagStore.tags.filter((tag) => tag.name.toLowerCase().includes(query)),
+  };
+});
+
+const hasSearchResults = computed(
+  () => Boolean(canvasStore.searchQuery.trim()) && (searchResults.value.canvases.length > 0 || searchResults.value.notes.length > 0 || searchResults.value.tags.length > 0),
+);
+
 function relativeTime(value: string) {
   const diff = Date.now() - new Date(value).getTime();
   const hour = 3600 * 1000;
@@ -120,6 +134,33 @@ function deleteTag(id: string, name: string) {
   noteStore.removeTagFromAll(id);
   tagStore.deleteTag(id);
 }
+
+function snippet(content: string) {
+  const normalized = content.replace(/\s+/g, " ").trim();
+  return normalized.length > 34 ? `${normalized.slice(0, 34)}...` : normalized || "空便签";
+}
+
+function canvasName(id: string) {
+  return canvasStore.canvases.find((canvas) => canvas.id === id)?.name ?? "未知画布";
+}
+
+function selectSearchNote(noteId: string, canvasId: string) {
+  showTrash.value = false;
+  tagStore.activeTagId = "";
+  canvasStore.selectCanvas(canvasId);
+  noteStore.select(noteId);
+  window.dispatchEvent(new CustomEvent("locate-note", { detail: { noteId } }));
+}
+
+function selectSearchTag(tagId: string) {
+  tagStore.activeTagId = tagId;
+  canvasStore.searchQuery = "";
+}
+
+function selectSearchCanvas(id: string) {
+  selectCanvas(id);
+  canvasStore.searchQuery = "";
+}
 </script>
 
 <template>
@@ -129,6 +170,34 @@ function deleteTag(id: string, name: string) {
     </button>
 
     <SearchBox v-model="canvasStore.searchQuery" />
+
+    <section v-if="canvasStore.searchQuery.trim()" class="search-results">
+      <template v-if="hasSearchResults">
+        <div v-if="searchResults.canvases.length" class="result-group">
+          <h3>画布</h3>
+          <button v-for="canvas in searchResults.canvases" :key="canvas.id" @click="selectSearchCanvas(canvas.id)">
+            <FileText :size="14" />
+            <span>{{ canvas.name }}</span>
+          </button>
+        </div>
+        <div v-if="searchResults.notes.length" class="result-group">
+          <h3>便签</h3>
+          <button v-for="note in searchResults.notes" :key="note.id" @click="selectSearchNote(note.id, note.canvasId)">
+            <FileText :size="14" />
+            <span>{{ snippet(note.content) }}</span>
+            <small>{{ canvasName(note.canvasId) }}</small>
+          </button>
+        </div>
+        <div v-if="searchResults.tags.length" class="result-group">
+          <h3>标签</h3>
+          <button v-for="tag in searchResults.tags" :key="tag.id" @click="selectSearchTag(tag.id)">
+            <i :style="{ backgroundColor: tag.color }"></i>
+            <span>{{ tag.name }}</span>
+          </button>
+        </div>
+      </template>
+      <div v-else class="empty small">没有匹配结果</div>
+    </section>
 
     <section class="section">
       <div class="section-title">
@@ -251,6 +320,70 @@ function deleteTag(id: string, name: string) {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.search-results {
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.result-group + .result-group {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #eef1f4;
+}
+
+.result-group h3 {
+  margin: 0 0 5px;
+  padding: 0 4px;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.result-group button {
+  width: 100%;
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  color: #374151;
+  background: transparent;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.result-group button:hover {
+  background: #eef2f7;
+}
+
+.result-group button span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.result-group button small {
+  max-width: 76px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.result-group button i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 .section-title {
