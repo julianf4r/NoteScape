@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { Bold, Copy, Palette, Pin, Tags, Trash2, Type } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Palette, Pin, Plus, Tags, Trash2 } from "lucide-vue-next";
 import type { NoteColor, StickyNote, TagItem } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 
@@ -131,6 +131,15 @@ function saveEdit() {
 function changeColor(color: NoteColor) {
   emit("update", { color }, true);
 }
+
+function changeFontSize(delta: number) {
+  emit("update", { fontSize: Math.min(32, Math.max(12, props.note.fontSize + delta)) }, true);
+}
+
+function setFontSize(event: Event) {
+  const value = Number((event.target as HTMLInputElement).value);
+  if (Number.isFinite(value)) emit("update", { fontSize: Math.min(32, Math.max(12, value)) }, true);
+}
 </script>
 
 <template>
@@ -163,9 +172,16 @@ function changeColor(color: NoteColor) {
 
     <div v-if="props.selected && !props.editing" class="note-actions">
       <button title="颜色"><Palette :size="15" /></button>
-      <button v-for="color in noteColorList" :key="color" class="swatch" :style="{ backgroundColor: noteColors[color] }" @click="changeColor(color)"></button>
-      <button title="字号" @click="emit('update', { fontSize: props.note.fontSize + 1 }, true)"><Type :size="15" /></button>
+      <span class="swatches">
+        <button v-for="color in noteColorList" :key="color" class="swatch" :style="{ backgroundColor: noteColors[color] }" @click="changeColor(color)"></button>
+      </span>
+      <button title="减小字号" @click="changeFontSize(-1)"><Minus :size="14" /></button>
+      <input class="font-input" type="number" min="12" max="32" :value="props.note.fontSize" @change="setFontSize" />
+      <button title="增大字号" @click="changeFontSize(1)"><Plus :size="14" /></button>
       <button title="加粗" @click="emit('update', { fontWeight: props.note.fontWeight === 'bold' ? 'normal' : 'bold' }, true)"><Bold :size="15" /></button>
+      <button title="左对齐" :class="{ active: props.note.textAlign === 'left' }" @click="emit('update', { textAlign: 'left' }, true)"><AlignLeft :size="15" /></button>
+      <button title="居中" :class="{ active: props.note.textAlign === 'center' }" @click="emit('update', { textAlign: 'center' }, true)"><AlignCenter :size="15" /></button>
+      <button title="置顶" @click="emit('front')"><ChevronsUp :size="15" /></button>
       <button title="标签" :class="{ active: showTags }" @click="showTags = !showTags"><Tags :size="15" /></button>
       <button title="复制" @click="emit('duplicate')"><Copy :size="15" /></button>
       <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>
@@ -269,8 +285,10 @@ textarea {
   left: 50%;
   bottom: calc(100% + 12px);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 4px;
+  max-width: 360px;
   padding: 5px;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -304,6 +322,26 @@ textarea {
   height: 18px;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 50%;
+}
+
+.swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 3px;
+  border-right: 1px solid #eef1f4;
+}
+
+.font-input {
+  width: 42px;
+  height: 26px;
+  padding: 0 3px;
+  color: #374151;
+  text-align: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  outline: 0;
+  background: #fff;
 }
 
 .resize-handle {
