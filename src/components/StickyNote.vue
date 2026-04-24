@@ -20,6 +20,7 @@ const props = defineProps<{
   tags: TagItem[];
   searchQuery: string;
   highlighted: boolean;
+  panMode: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -125,6 +126,10 @@ watch(
 );
 
 function startDrag(event: MouseEvent) {
+  if (props.panMode || event.button === 1) {
+    emit("select", event);
+    return;
+  }
   if (props.editing || (event.target as HTMLElement).closest(".note-actions, .resize-handle")) return;
   emit("select", event);
   dragStart.value = { x: event.clientX, y: event.clientY, before: { ...props.note } };

@@ -189,6 +189,7 @@ function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __b
 }
 
 function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
+  if (handActive.value || spaceDown.value || event.button === 1) return;
   const additive = event.shiftKey || event.ctrlKey;
   if (!noteStore.selectedIds.includes(note.id)) noteStore.select(note.id, additive);
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id)) {
@@ -425,6 +426,7 @@ watch(
         :tags="tagStore.tags"
         :search-query="canvasStore.searchQuery"
         :highlighted="highlightedNoteId === note.id"
+        :pan-mode="handActive || spaceDown"
         @select="onNotePointerDown($event, note)"
         @edit="noteStore.editingId = note.id"
         @update="(patch, track) => updateSelection(note, patch, track)"
