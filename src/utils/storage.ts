@@ -42,7 +42,6 @@ const baseNote = (
 
 export const defaultSettings: AppSettings = {
   theme: "light",
-  defaultNoteColor: "yellow",
   defaultFontSize: 18,
   showGrid: true,
   randomRotation: true,

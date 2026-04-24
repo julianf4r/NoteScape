@@ -6,9 +6,7 @@ import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../stores/appStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { noteColorList, noteColors } from "../utils/colors";
 import { backupDatabase } from "../utils/storage";
-import type { NoteColor } from "../types";
 
 const appStore = useAppStore();
 const feedback = useFeedbackStore();
@@ -19,10 +17,6 @@ const dbMessage = ref("");
 const dataMessage = ref("");
 
 const settings = computed(() => settingsStore.settings);
-
-function setColor(color: NoteColor) {
-  settingsStore.updateSettings({ defaultNoteColor: color });
-}
 
 async function exportData() {
   const selected = await save({
@@ -161,15 +155,6 @@ async function restoreDatabase() {
 
       <section>
         <h3>便签</h3>
-        <div class="color-grid">
-          <button
-            v-for="color in noteColorList"
-            :key="color"
-            :class="{ active: color === settings.defaultNoteColor }"
-            :style="{ backgroundColor: noteColors[color] }"
-            @click="setColor(color)"
-          ></button>
-        </div>
         <label>
           <span>默认字号</span>
           <input type="number" min="12" max="32" :value="settings.defaultFontSize" @change="settingsStore.updateSettings({ defaultFontSize: Number(($event.target as HTMLInputElement).value) })" />
@@ -288,24 +273,6 @@ input[type="number"] {
   justify-self: end;
   width: 18px;
   height: 18px;
-}
-
-.color-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.color-grid button {
-  aspect-ratio: 1;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 50%;
-}
-
-.color-grid button.active {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
 }
 
 .actions {

@@ -57,7 +57,6 @@ export interface TagItem {
 
 export interface AppSettings {
   theme: "light";
-  defaultNoteColor: NoteColor;
   defaultFontSize: number;
   showGrid: boolean;
   randomRotation: boolean;

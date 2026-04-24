@@ -89,7 +89,6 @@ struct TagItem {
 #[serde(rename_all = "camelCase")]
 struct AppSettings {
     theme: String,
-    default_note_color: String,
     default_font_size: f64,
     show_grid: bool,
     random_rotation: bool,
@@ -275,11 +274,6 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
     tx.execute(
         "INSERT INTO app_meta (key, value) VALUES ('theme', ?1)",
         params![app_data.settings.theme],
-    )
-    .map_err(|error| error.to_string())?;
-    tx.execute(
-        "INSERT INTO app_meta (key, value) VALUES ('default_note_color', ?1)",
-        params![app_data.settings.default_note_color],
     )
     .map_err(|error| error.to_string())?;
     tx.execute(
@@ -508,7 +502,6 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
 fn save_settings(conn: &Connection, settings: &AppSettings) -> Result<(), String> {
     let entries = [
         ("theme", settings.theme.clone()),
-        ("default_note_color", settings.default_note_color.clone()),
         ("default_font_size", settings.default_font_size.to_string()),
         ("show_grid", bool_to_text(settings.show_grid).to_string()),
         ("random_rotation", bool_to_text(settings.random_rotation).to_string()),
@@ -533,8 +526,6 @@ fn load_structured_data(conn: &Connection) -> Result<AppData, String> {
 
     let settings = AppSettings {
         theme: meta_value(conn, "theme")?.unwrap_or_else(|| "light".to_string()),
-        default_note_color: meta_value(conn, "default_note_color")?
-            .unwrap_or_else(|| "yellow".to_string()),
         default_font_size: meta_value(conn, "default_font_size")?
             .and_then(|value| value.parse::<f64>().ok())
             .unwrap_or(18.0),

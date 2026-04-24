@@ -47,7 +47,6 @@ function createNoteAt(clientX: number, clientY: number) {
     canvasStore.currentCanvasId,
     point.x - 110,
     point.y - 90,
-    settingsStore.settings.defaultNoteColor,
     settingsStore.settings.defaultFontSize,
     settingsStore.settings.randomRotation,
   );

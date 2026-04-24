@@ -50,7 +50,7 @@ function onKeydown(event: KeyboardEvent) {
   }
   if (event.ctrlKey && event.key.toLowerCase() === "n" && canvasStore.currentCanvasId) {
     event.preventDefault();
-    noteStore.createNote(canvasStore.currentCanvasId, 360, 260, settingsStore.settings.defaultNoteColor, settingsStore.settings.defaultFontSize, settingsStore.settings.randomRotation);
+    noteStore.createNote(canvasStore.currentCanvasId, 360, 260, settingsStore.settings.defaultFontSize, settingsStore.settings.randomRotation);
   }
   if (event.key === "Delete" && selected && !isEditing) {
     if (noteStore.selectedIds.length > 1) noteStore.deleteSelected();
