@@ -70,7 +70,7 @@ export const useNoteStore = defineStore("note", {
       if (this.history.length > 50) this.history.shift();
       this.future = [];
     },
-    createNote(canvasId: string, x: number, y: number, fontSize: number, rotationEnabled = true, content = "新便签") {
+    createNote(canvasId: string, x: number, y: number, fontSize: number, rotationEnabled = true, content = "") {
       const preset = randomNotePreset();
       const note: StickyNote = {
         id: nanoid(),
