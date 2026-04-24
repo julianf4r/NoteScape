@@ -87,6 +87,11 @@ export const useNoteStore = defineStore("note", {
       this.selectedIds = this.selectedIds.filter((item) => item !== id);
       this.addHistory({ type: "delete", before: { ...note } });
     },
+    removeNotesByCanvas(canvasId: string) {
+      this.notes = this.notes.filter((note) => note.canvasId !== canvasId);
+      this.selectedIds = this.selectedIds.filter((id) => this.notes.some((note) => note.id === id));
+      if (this.editingId && !this.notes.some((note) => note.id === this.editingId)) this.editingId = "";
+    },
     duplicateNote(id: string) {
       const note = this.notes.find((item) => item.id === id);
       if (!note) return;

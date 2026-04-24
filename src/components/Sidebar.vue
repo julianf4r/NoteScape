@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
-import { Archive, FileText, Menu, Plus, Settings } from "lucide-vue-next";
+import { computed, nextTick, ref } from "vue";
+import { Archive, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
 import SearchBox from "./SearchBox.vue";
 import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
@@ -12,6 +12,8 @@ const noteStore = useNoteStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
 const renamingId = ref("");
+const renameDraft = ref("");
+const showTrash = ref(false);
 
 const filteredCanvases = computed(() => {
   const query = canvasStore.searchQuery.trim().toLowerCase();
@@ -30,8 +32,55 @@ function relativeTime(value: string) {
 }
 
 function createCanvas() {
-  canvasStore.createCanvas();
+  const canvas = canvasStore.createCanvas();
   noteStore.clearSelection();
+  showTrash.value = false;
+  startRename(canvas.id, canvas.name);
+}
+
+function startRename(id: string, name: string) {
+  renamingId.value = id;
+  renameDraft.value = name;
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>(`[data-rename-id="${id}"]`);
+    input?.focus();
+    input?.select();
+  });
+}
+
+function commitRename(id: string) {
+  const value = renameDraft.value.trim();
+  if (value) canvasStore.renameCanvas(id, value);
+  renamingId.value = "";
+  renameDraft.value = "";
+}
+
+function cancelRename() {
+  renamingId.value = "";
+  renameDraft.value = "";
+}
+
+function selectCanvas(id: string) {
+  showTrash.value = false;
+  canvasStore.selectCanvas(id);
+}
+
+function deleteCanvas(id: string, name: string) {
+  if (!window.confirm(`删除画布“${name}”？画布会先移入回收站。`)) return;
+  canvasStore.deleteCanvas(id);
+  noteStore.clearSelection();
+}
+
+function restoreCanvas(id: string) {
+  canvasStore.restoreCanvas(id);
+  canvasStore.selectCanvas(id);
+  showTrash.value = false;
+}
+
+function removeForever(id: string, name: string) {
+  if (!window.confirm(`永久删除画布“${name}”？此操作会删除其中所有便签，且无法撤销。`)) return;
+  noteStore.removeNotesByCanvas(id);
+  canvasStore.removeForever(id);
 }
 </script>
 
@@ -49,33 +98,50 @@ function createCanvas() {
         <button class="new-button" @click="createCanvas"><Plus :size="15" />新建</button>
       </div>
 
-      <div v-if="!filteredCanvases.length" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
+      <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
 
       <button
         v-for="canvas in filteredCanvases"
         :key="canvas.id"
         class="canvas-row"
-        :class="{ active: canvas.id === canvasStore.currentCanvasId }"
-        @click="canvasStore.selectCanvas(canvas.id)"
-        @dblclick="renamingId = canvas.id"
+        :class="{ active: canvas.id === canvasStore.currentCanvasId && !showTrash }"
+        @click="selectCanvas(canvas.id)"
+        @dblclick="startRename(canvas.id, canvas.name)"
+        @contextmenu.prevent="startRename(canvas.id, canvas.name)"
       >
         <FileText :size="16" />
         <input
           v-if="renamingId === canvas.id"
-          :value="canvas.name"
+          v-model="renameDraft"
+          :data-rename-id="canvas.id"
           @click.stop
-          @keydown.enter="canvasStore.renameCanvas(canvas.id, ($event.target as HTMLInputElement).value); renamingId = ''"
-          @blur="canvasStore.renameCanvas(canvas.id, ($event.target as HTMLInputElement).value); renamingId = ''"
+          @keydown.enter.stop.prevent="commitRename(canvas.id)"
+          @keydown.esc.stop.prevent="cancelRename"
+          @blur="commitRename(canvas.id)"
         />
         <span v-else class="name">{{ canvas.name }}</span>
         <span class="time">{{ relativeTime(canvas.updatedAt) }}</span>
+        <span class="row-actions">
+          <button title="重命名" @click.stop="startRename(canvas.id, canvas.name)"><Pencil :size="14" /></button>
+          <button title="删除" @click.stop="deleteCanvas(canvas.id, canvas.name)"><Trash2 :size="14" /></button>
+        </span>
       </button>
 
-      <button class="canvas-row trash">
+      <button class="canvas-row trash" :class="{ active: showTrash }" @click="showTrash = !showTrash">
         <Archive :size="16" />
         <span class="name">回收站</span>
         <span class="time">{{ canvasStore.deletedCanvases.length || "" }}</span>
       </button>
+
+      <div v-if="showTrash" class="trash-panel">
+        <div v-if="!canvasStore.deletedCanvases.length" class="empty small">回收站为空</div>
+        <div v-for="canvas in canvasStore.deletedCanvases" :key="canvas.id" class="trash-row">
+          <FileText :size="15" />
+          <span>{{ canvas.name }}</span>
+          <button title="恢复" @click="restoreCanvas(canvas.id)"><RotateCcw :size="14" /></button>
+          <button title="永久删除" @click="removeForever(canvas.id, canvas.name)"><X :size="14" /></button>
+        </div>
+      </div>
     </section>
 
     <section class="section tags">
@@ -171,6 +237,10 @@ function createCanvas() {
   text-align: left;
 }
 
+.canvas-row {
+  padding-right: 8px;
+}
+
 .canvas-row.active {
   color: #1d4ed8;
   background: var(--primary-soft);
@@ -214,10 +284,71 @@ function createCanvas() {
   background: transparent;
 }
 
+.row-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.canvas-row:hover .row-actions {
+  display: inline-flex;
+}
+
+.canvas-row:hover .time {
+  display: none;
+}
+
+.row-actions button,
+.trash-row button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.row-actions button:hover,
+.trash-row button:hover {
+  color: #1f2937;
+  background: #fff;
+}
+
 .trash {
   margin-top: 16px;
   border-top: 1px solid #edf0f3;
   border-radius: 0;
+}
+
+.trash-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0 4px 14px;
+}
+
+.trash-row {
+  display: grid;
+  grid-template-columns: 20px 1fr 28px 28px;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 4px 0 8px;
+  color: #4b5563;
+  border-radius: 7px;
+}
+
+.trash-row:hover {
+  background: #eef2f7;
+}
+
+.trash-row span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .tags {
@@ -245,5 +376,9 @@ function createCanvas() {
   line-height: 1.7;
   font-size: 14px;
   color: var(--text-muted);
+}
+
+.empty.small {
+  padding: 10px 8px;
 }
 </style>
