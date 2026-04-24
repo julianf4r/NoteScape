@@ -148,6 +148,10 @@ export async function saveSettingsData(settings: AppSettings) {
   await invoke("save_app_settings", { settings: JSON.stringify(settings) });
 }
 
+export async function backupDatabase(backupPath: string) {
+  await invoke("backup_database", { backupPath });
+}
+
 export function reportPersistenceError(scope: string, error: unknown) {
   window.dispatchEvent(
     new CustomEvent("persistence-error", {

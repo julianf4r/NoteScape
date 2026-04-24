@@ -848,6 +848,13 @@ fn save_app_settings(app: AppHandle, settings: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn backup_database(app: AppHandle, backup_path: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    fs::copy(db_path, backup_path).map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 fn set_database_path(
     app: AppHandle,
     db_path: String,
@@ -881,7 +888,8 @@ pub fn run() {
             delete_notes_by_canvas,
             save_tag,
             delete_tag,
-            save_app_settings
+            save_app_settings,
+            backup_database
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

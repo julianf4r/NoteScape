@@ -7,6 +7,7 @@ import { useAppStore } from "../stores/appStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColorList, noteColors } from "../utils/colors";
+import { backupDatabase } from "../utils/storage";
 import type { NoteColor } from "../types";
 
 const appStore = useAppStore();
@@ -108,6 +109,40 @@ async function createDatabase() {
     feedback.notify(`创建数据库失败：${dbMessage.value}`, "error");
   }
 }
+
+async function backupCurrentDatabase() {
+  const selected = await save({
+    defaultPath: "notescape-backup.sqlite3",
+    filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
+  });
+  if (!selected) return;
+  try {
+    await backupDatabase(selected);
+    dbMessage.value = "数据库已备份";
+    feedback.notify(dbMessage.value, "success");
+  } catch (error) {
+    dbMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`备份数据库失败：${dbMessage.value}`, "error");
+  }
+}
+
+async function restoreDatabase() {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
+  });
+  if (typeof selected !== "string") return;
+  if (!feedback.confirm("恢复数据库会切换到所选数据库文件，是否继续？")) return;
+  try {
+    await appStore.changeDatabase(selected);
+    dbMessage.value = "数据库已恢复";
+    feedback.notify(dbMessage.value, "success");
+  } catch (error) {
+    dbMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`恢复数据库失败：${dbMessage.value}`, "error");
+  }
+}
 </script>
 
 <template>
@@ -170,6 +205,10 @@ async function createDatabase() {
         <div class="actions two">
           <button @click="chooseDatabase">选择数据库</button>
           <button @click="createDatabase">新建数据库</button>
+        </div>
+        <div class="actions two">
+          <button @click="backupCurrentDatabase">备份数据库</button>
+          <button @click="restoreDatabase">恢复数据库</button>
         </div>
         <p v-if="dbMessage" class="hint">{{ dbMessage }}</p>
       </section>
