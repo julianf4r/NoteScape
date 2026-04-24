@@ -3,17 +3,20 @@ import { computed, onMounted, onUnmounted, watch } from "vue";
 import CanvasBoard from "./CanvasBoard.vue";
 import SettingsPanel from "./SettingsPanel.vue";
 import Sidebar from "./Sidebar.vue";
+import ToastHost from "./ToastHost.vue";
 import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
+import { useFeedbackStore } from "../stores/feedbackStore";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
+const feedbackStore = useFeedbackStore();
 
 const noteTags = computed(() => noteStore.notes.flatMap((note) => note.tags));
 
@@ -61,9 +64,18 @@ function onKeydown(event: KeyboardEvent) {
 onMounted(() => {
   appStore.load();
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("persistence-error", onPersistenceError);
 });
 
-onUnmounted(() => window.removeEventListener("keydown", onKeydown));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("persistence-error", onPersistenceError);
+});
+
+function onPersistenceError(event: Event) {
+  const message = (event as CustomEvent<{ message: string }>).detail?.message ?? "保存失败";
+  feedbackStore.notify(message, "error");
+}
 
 watch(
   noteTags,
@@ -81,6 +93,7 @@ watch(
       <CanvasBoard />
     </main>
     <SettingsPanel v-if="settingsStore.panelOpen" />
+    <ToastHost />
   </div>
 </template>
 

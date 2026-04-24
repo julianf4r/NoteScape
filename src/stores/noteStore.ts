@@ -1,12 +1,18 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { HistoryEntry, NoteColor, StickyNote } from "../types";
-import { deleteNoteData, deleteNotesByCanvasData, saveNoteData } from "../utils/storage";
+import { deleteNoteData, deleteNotesByCanvasData, reportPersistenceError, saveNoteData } from "../utils/storage";
 
 const now = () => new Date().toISOString();
 const randomRotation = () => Math.round((Math.random() * 4 - 2) * 10) / 10;
 const hasMeaningfulChange = (before: StickyNote, after: StickyNote) =>
   JSON.stringify({ ...before, updatedAt: undefined }) !== JSON.stringify({ ...after, updatedAt: undefined });
+const saveNoteSafely = (note: StickyNote) => {
+  void saveNoteData(note).catch((error) => reportPersistenceError("保存便签", error));
+};
+const deleteNoteSafely = (id: string) => {
+  void deleteNoteData(id).catch((error) => reportPersistenceError("删除便签", error));
+};
 
 export const useNoteStore = defineStore("note", {
   state: () => ({
@@ -63,7 +69,7 @@ export const useNoteStore = defineStore("note", {
       this.notes.push(note);
       this.selectedIds = [note.id];
       this.addHistory({ type: "create", after: { ...note } });
-      void saveNoteData(note);
+      saveNoteSafely(note);
       return note;
     },
     updateNote(id: string, patch: Partial<StickyNote>, track = true) {
@@ -72,14 +78,14 @@ export const useNoteStore = defineStore("note", {
       const before = { ...note };
       Object.assign(note, patch, { updatedAt: now() });
       if (track && hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
-      void saveNoteData(note);
+      saveNoteSafely(note);
     },
     commitNoteChange(before: StickyNote, patch: Partial<StickyNote>) {
       const note = this.notes.find((item) => item.id === before.id);
       if (!note) return;
       Object.assign(note, patch, { updatedAt: now() });
       if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
-      void saveNoteData(note);
+      saveNoteSafely(note);
     },
     patchNoteLive(id: string, patch: Partial<StickyNote>) {
       const note = this.notes.find((item) => item.id === id);
@@ -91,19 +97,19 @@ export const useNoteStore = defineStore("note", {
       this.notes = this.notes.filter((item) => item.id !== id);
       this.selectedIds = this.selectedIds.filter((item) => item !== id);
       this.addHistory({ type: "delete", before: { ...note } });
-      void deleteNoteData(id);
+      deleteNoteSafely(id);
     },
     removeNotesByCanvas(canvasId: string) {
       this.notes = this.notes.filter((note) => note.canvasId !== canvasId);
       this.selectedIds = this.selectedIds.filter((id) => this.notes.some((note) => note.id === id));
       if (this.editingId && !this.notes.some((note) => note.id === this.editingId)) this.editingId = "";
-      void deleteNotesByCanvasData(canvasId);
+      void deleteNotesByCanvasData(canvasId).catch((error) => reportPersistenceError("删除画布便签", error));
     },
     removeTagFromAll(tagId: string) {
       this.notes.forEach((note) => {
         note.tags = note.tags.filter((id) => id !== tagId);
         note.updatedAt = now();
-        void saveNoteData(note);
+        saveNoteSafely(note);
       });
     },
     toggleTagForNote(noteId: string, tagId: string) {
@@ -114,7 +120,7 @@ export const useNoteStore = defineStore("note", {
       note.tags = exists ? note.tags.filter((id) => id !== tagId) : [...note.tags, tagId];
       note.updatedAt = now();
       this.addHistory({ type: "update", before, after: { ...note, tags: [...note.tags] } });
-      void saveNoteData(note);
+      saveNoteSafely(note);
     },
     duplicateNote(id: string) {
       const note = this.notes.find((item) => item.id === id);
@@ -131,7 +137,7 @@ export const useNoteStore = defineStore("note", {
       this.notes.push(copy);
       this.selectedIds = [copy.id];
       this.addHistory({ type: "create", after: { ...copy } });
-      void saveNoteData(copy);
+      saveNoteSafely(copy);
     },
     duplicateSelected() {
       const selected = this.notes.filter((note) => this.selectedIds.includes(note.id));
@@ -149,7 +155,7 @@ export const useNoteStore = defineStore("note", {
       this.selectedIds = copies.map((note) => note.id);
       copies.forEach((note) => {
         this.addHistory({ type: "create", after: { ...note } });
-        void saveNoteData(note);
+        saveNoteSafely(note);
       });
     },
     copySelected() {
@@ -175,7 +181,7 @@ export const useNoteStore = defineStore("note", {
       this.selectedIds = copies.map((note) => note.id);
       copies.forEach((note) => {
         this.addHistory({ type: "create", after: { ...note } });
-        void saveNoteData(note);
+        saveNoteSafely(note);
       });
     },
     deleteSelected() {
@@ -206,7 +212,7 @@ export const useNoteStore = defineStore("note", {
         const note = this.notes.find((item) => item.id === before.id);
         if (!note) return;
         if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
-        void saveNoteData(note);
+        saveNoteSafely(note);
       });
     },
     bringToFront(id: string) {
@@ -236,17 +242,17 @@ export const useNoteStore = defineStore("note", {
       if (!entry) return;
       if (entry.type === "create" && entry.after) {
         this.notes = this.notes.filter((note) => note.id !== entry.after?.id);
-        void deleteNoteData(entry.after.id);
+        deleteNoteSafely(entry.after.id);
       }
       if (entry.type === "delete" && entry.before) {
         this.notes.push(entry.before);
-        void saveNoteData(entry.before);
+        saveNoteSafely(entry.before);
       }
       if (entry.type === "update" && entry.before) {
         const index = this.notes.findIndex((note) => note.id === entry.before?.id);
         if (index >= 0) {
           this.notes[index] = entry.before;
-          void saveNoteData(entry.before);
+          saveNoteSafely(entry.before);
         }
       }
       this.future.push(entry);
@@ -256,17 +262,17 @@ export const useNoteStore = defineStore("note", {
       if (!entry) return;
       if (entry.type === "create" && entry.after) {
         this.notes.push(entry.after);
-        void saveNoteData(entry.after);
+        saveNoteSafely(entry.after);
       }
       if (entry.type === "delete" && entry.before) {
         this.notes = this.notes.filter((note) => note.id !== entry.before?.id);
-        void deleteNoteData(entry.before.id);
+        deleteNoteSafely(entry.before.id);
       }
       if (entry.type === "update" && entry.after) {
         const index = this.notes.findIndex((note) => note.id === entry.after?.id);
         if (index >= 0) {
           this.notes[index] = entry.after;
-          void saveNoteData(entry.after);
+          saveNoteSafely(entry.after);
         }
       }
       this.history.push(entry);

@@ -6,11 +6,13 @@ import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
+import { useFeedbackStore } from "../stores/feedbackStore";
 
 const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
+const feedback = useFeedbackStore();
 const renamingId = ref("");
 const renameDraft = ref("");
 const showTrash = ref(false);
@@ -83,9 +85,10 @@ function selectCanvas(id: string) {
 }
 
 function deleteCanvas(id: string, name: string) {
-  if (!window.confirm(`删除画布“${name}”？画布会先移入回收站。`)) return;
+  if (!feedback.confirm(`删除画布“${name}”？画布会先移入回收站。`)) return;
   canvasStore.deleteCanvas(id);
   noteStore.clearSelection();
+  feedback.notify("画布已移入回收站", "success");
 }
 
 function restoreCanvas(id: string) {
@@ -95,9 +98,10 @@ function restoreCanvas(id: string) {
 }
 
 function removeForever(id: string, name: string) {
-  if (!window.confirm(`永久删除画布“${name}”？此操作会删除其中所有便签，且无法撤销。`)) return;
+  if (!feedback.confirm(`永久删除画布“${name}”？此操作会删除其中所有便签，且无法撤销。`)) return;
   noteStore.removeNotesByCanvas(id);
   canvasStore.removeForever(id);
+  feedback.notify("画布已永久删除", "success");
 }
 
 function createTag() {
@@ -130,9 +134,10 @@ function cancelTagRename() {
 }
 
 function deleteTag(id: string, name: string) {
-  if (!window.confirm(`删除标签“${name}”？该标签会从所有便签中移除。`)) return;
+  if (!feedback.confirm(`删除标签“${name}”？该标签会从所有便签中移除。`)) return;
   noteStore.removeTagFromAll(id);
   tagStore.deleteTag(id);
+  feedback.notify("标签已删除", "success");
 }
 
 function snippet(content: string) {

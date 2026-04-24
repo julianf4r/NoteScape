@@ -148,6 +148,16 @@ export async function saveSettingsData(settings: AppSettings) {
   await invoke("save_app_settings", { settings: JSON.stringify(settings) });
 }
 
+export function reportPersistenceError(scope: string, error: unknown) {
+  window.dispatchEvent(
+    new CustomEvent("persistence-error", {
+      detail: {
+        message: `${scope}失败：${error instanceof Error ? error.message : String(error)}`,
+      },
+    }),
+  );
+}
+
 export async function switchDatabase(dbPath: string, fallbackData: AppData): Promise<DatabaseLoadResult> {
   return invoke<DatabaseLoadResult>("set_database_path", {
     dbPath,

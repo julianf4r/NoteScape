@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { CanvasItem } from "../types";
 import type { ViewportState } from "../types";
-import { deleteCanvasData, removeCanvasForeverData, restoreCanvasData, saveCanvasData } from "../utils/storage";
+import { deleteCanvasData, removeCanvasForeverData, reportPersistenceError, restoreCanvasData, saveCanvasData } from "../utils/storage";
 
 const now = () => new Date().toISOString();
 
@@ -32,7 +32,7 @@ export const useCanvasStore = defineStore("canvas", {
       };
       this.canvases.unshift(canvas);
       this.currentCanvasId = canvas.id;
-      void saveCanvasData(canvas);
+      void saveCanvasData(canvas).catch((error) => reportPersistenceError("保存画布", error));
       return canvas;
     },
     selectCanvas(id: string) {
@@ -43,7 +43,7 @@ export const useCanvasStore = defineStore("canvas", {
       if (canvas && name.trim()) {
         canvas.name = name.trim();
         canvas.updatedAt = now();
-        void saveCanvasData(canvas);
+        void saveCanvasData(canvas).catch((error) => reportPersistenceError("保存画布", error));
       }
     },
     deleteCanvas(id: string) {
@@ -52,7 +52,7 @@ export const useCanvasStore = defineStore("canvas", {
       const deletedAt = now();
       canvas.deletedAt = deletedAt;
       canvas.updatedAt = deletedAt;
-      void deleteCanvasData(id, deletedAt);
+      void deleteCanvasData(id, deletedAt).catch((error) => reportPersistenceError("删除画布", error));
       if (this.currentCanvasId === id) {
         this.currentCanvasId = this.canvases.find((item) => !item.deletedAt)?.id ?? "";
       }
@@ -62,19 +62,19 @@ export const useCanvasStore = defineStore("canvas", {
       if (canvas) {
         canvas.deletedAt = null;
         canvas.updatedAt = now();
-        void restoreCanvasData(id, canvas.updatedAt);
+        void restoreCanvasData(id, canvas.updatedAt).catch((error) => reportPersistenceError("恢复画布", error));
       }
     },
     removeForever(id: string) {
       this.canvases = this.canvases.filter((item) => item.id !== id);
-      void removeCanvasForeverData(id);
+      void removeCanvasForeverData(id).catch((error) => reportPersistenceError("永久删除画布", error));
     },
     updateViewport(id: string, viewport: ViewportState) {
       const canvas = this.canvases.find((item) => item.id === id);
       if (!canvas) return;
       canvas.viewport = { ...viewport };
       canvas.updatedAt = now();
-      void saveCanvasData(canvas);
+      void saveCanvasData(canvas).catch((error) => reportPersistenceError("保存视口", error));
     },
   },
 });

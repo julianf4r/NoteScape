@@ -4,11 +4,13 @@ import { Download, RotateCcw, Upload, X } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../stores/appStore";
+import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColorList, noteColors } from "../utils/colors";
 import type { NoteColor } from "../types";
 
 const appStore = useAppStore();
+const feedback = useFeedbackStore();
 const settingsStore = useSettingsStore();
 const importText = ref("");
 const exported = ref("");
@@ -30,8 +32,10 @@ async function exportData() {
   try {
     await writeTextFile(selected, appStore.exportData());
     dataMessage.value = "数据已导出";
+    feedback.notify(dataMessage.value, "success");
   } catch (error) {
     dataMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`导出失败：${dataMessage.value}`, "error");
   }
 }
 
@@ -41,8 +45,10 @@ function importData() {
     appStore.importData(importText.value);
     importText.value = "";
     dataMessage.value = "数据已导入";
+    feedback.notify(dataMessage.value, "success");
   } catch (error) {
     dataMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`导入失败：${dataMessage.value}`, "error");
   }
 }
 
@@ -56,15 +62,18 @@ async function importFromFile() {
   try {
     appStore.importData(await readTextFile(selected));
     dataMessage.value = "数据已导入";
+    feedback.notify(dataMessage.value, "success");
   } catch (error) {
     dataMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`导入失败：${dataMessage.value}`, "error");
   }
 }
 
 async function resetData() {
-  if (!window.confirm("重置示例数据会覆盖当前数据库中的内容，是否继续？")) return;
+  if (!feedback.confirm("重置示例数据会覆盖当前数据库中的内容，是否继续？")) return;
   await appStore.resetSampleData();
   dataMessage.value = "示例数据已重置";
+  feedback.notify(dataMessage.value, "success");
 }
 
 async function chooseDatabase() {
@@ -77,8 +86,10 @@ async function chooseDatabase() {
   try {
     await appStore.changeDatabase(selected);
     dbMessage.value = "已切换数据库文件";
+    feedback.notify(dbMessage.value, "success");
   } catch (error) {
     dbMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`切换数据库失败：${dbMessage.value}`, "error");
   }
 }
 
@@ -91,8 +102,10 @@ async function createDatabase() {
   try {
     await appStore.changeDatabase(selected);
     dbMessage.value = "已创建并切换数据库文件";
+    feedback.notify(dbMessage.value, "success");
   } catch (error) {
     dbMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`创建数据库失败：${dbMessage.value}`, "error");
   }
 }
 </script>

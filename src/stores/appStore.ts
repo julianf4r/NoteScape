@@ -5,6 +5,7 @@ import { useCanvasStore } from "./canvasStore";
 import { useNoteStore } from "./noteStore";
 import { useSettingsStore } from "./settingsStore";
 import { useTagStore } from "./tagStore";
+import { useFeedbackStore } from "./feedbackStore";
 
 export const useAppStore = defineStore("app", {
   state: () => ({
@@ -28,6 +29,7 @@ export const useAppStore = defineStore("app", {
         this.applyData(parseData(result.data));
       } catch (error) {
         this.loadError = error instanceof Error ? error.message : String(error);
+        useFeedbackStore().notify(`数据库加载失败：${this.loadError}`, "error");
         this.applyData(createDefaultData());
       }
       this.loaded = true;
@@ -49,9 +51,11 @@ export const useAppStore = defineStore("app", {
         await saveData(this.snapshot());
         this.saveStatus = "saved";
         this.statusMessage = immediate ? "已手动保存" : "已保存";
+        if (immediate) useFeedbackStore().notify(this.statusMessage, "success");
       } catch (error) {
         this.saveStatus = "error";
         this.statusMessage = error instanceof Error ? error.message : String(error);
+        useFeedbackStore().notify(`保存失败：${this.statusMessage}`, "error");
       }
     },
     async resetSampleData() {
