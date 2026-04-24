@@ -152,17 +152,31 @@ function stopPan() {
   saveViewport();
 }
 
+function isCanvasBlankTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return !target.closest(".sticky-note, .toolbar, .minimap, .menu-popover, .empty-board");
+}
+
+function isCanvasControlTarget(target: EventTarget | null) {
+  return target instanceof HTMLElement && Boolean(target.closest(".toolbar, .minimap, .menu-popover"));
+}
+
 function onBoardMouseDown(event: MouseEvent) {
   contextMenu.value = null;
-  if (noteStore.editingId && (event.target as HTMLElement).classList.contains("canvas-board")) noteStore.stopEditing();
-  if ((event.target as HTMLElement).classList.contains("canvas-board")) {
+  const blankTarget = isCanvasBlankTarget(event.target);
+  if (noteStore.editingId && blankTarget) noteStore.stopEditing();
+  if (blankTarget) {
     if (event.shiftKey || event.ctrlKey) {
       startBoxSelect(event);
     } else {
       noteStore.clearSelection();
     }
   }
-  startPan(event);
+  if (!isCanvasControlTarget(event.target) && (blankTarget || event.button === 1 || handActive.value || spaceDown.value)) startPan(event);
+}
+
+function onBoardDoubleClick(event: MouseEvent) {
+  if (isCanvasBlankTarget(event.target)) createNoteAt(event.clientX, event.clientY);
 }
 
 function openCanvasMenu(event: MouseEvent) {
@@ -407,7 +421,7 @@ watch(
     class="canvas-board"
     :class="canvasClass"
     @mousedown="onBoardMouseDown"
-    @dblclick.self="createNoteAt($event.clientX, $event.clientY)"
+    @dblclick="onBoardDoubleClick"
     @wheel="onWheel"
     @contextmenu.prevent="openCanvasMenu"
   >
