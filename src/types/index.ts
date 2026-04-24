@@ -31,6 +31,7 @@ export interface StickyNote {
   fontSize: number;
   fontWeight: "normal" | "medium" | "bold";
   textAlign: "left" | "center";
+  decoration?: "none" | "pin" | "tape";
   checkedItems?: ChecklistItem[];
   createdAt: string;
   updatedAt: string;

@@ -61,6 +61,7 @@ struct StickyNote {
     font_size: f64,
     font_weight: String,
     text_align: String,
+    decoration: Option<String>,
     checked_items: Option<Vec<ChecklistItem>>,
     created_at: String,
     updated_at: String,
@@ -186,6 +187,7 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             font_size REAL NOT NULL,
             font_weight TEXT NOT NULL,
             text_align TEXT NOT NULL,
+            decoration TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY(canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
@@ -217,6 +219,7 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
     add_column_if_missing(conn, "canvases", "viewport_offset_y", "REAL")?;
     add_column_if_missing(conn, "canvases", "viewport_scale", "REAL")?;
     add_column_if_missing(conn, "notes", "content_json", "TEXT")?;
+    add_column_if_missing(conn, "notes", "decoration", "TEXT")?;
     Ok(())
 }
 
@@ -336,8 +339,8 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
         tx.execute(
             "INSERT INTO notes (
                 id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
-                font_size, font_weight, text_align, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                font_size, font_weight, text_align, decoration, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 note.id,
                 note.canvas_id,
@@ -354,6 +357,7 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
                 note.font_size,
                 note.font_weight,
                 note.text_align,
+                note.decoration,
                 note.created_at,
                 note.updated_at
             ],
@@ -430,8 +434,8 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
     tx.execute(
         "INSERT INTO notes (
             id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
-            font_size, font_weight, text_align, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+            font_size, font_weight, text_align, decoration, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
         ON CONFLICT(id) DO UPDATE SET
             canvas_id = excluded.canvas_id,
             title = excluded.title,
@@ -447,6 +451,7 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
             font_size = excluded.font_size,
             font_weight = excluded.font_weight,
             text_align = excluded.text_align,
+            decoration = excluded.decoration,
             updated_at = excluded.updated_at",
         params![
             note.id,
@@ -464,6 +469,7 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
             note.font_size,
             note.font_weight,
             note.text_align,
+            note.decoration,
             note.created_at,
             note.updated_at
         ],
@@ -660,7 +666,7 @@ fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
     let mut statement = conn
         .prepare(
             "SELECT id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
-                    font_size, font_weight, text_align, created_at, updated_at
+                    font_size, font_weight, text_align, decoration, created_at, updated_at
              FROM notes
              ORDER BY z_index ASC",
         )
@@ -686,9 +692,10 @@ fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
                 font_size: row.get(12)?,
                 font_weight: row.get(13)?,
                 text_align: row.get(14)?,
+                decoration: row.get(15)?,
                 checked_items: None,
-                created_at: row.get(15)?,
-                updated_at: row.get(16)?,
+                created_at: row.get(16)?,
+                updated_at: row.get(17)?,
             })
         })
         .map_err(|error| error.to_string())?;

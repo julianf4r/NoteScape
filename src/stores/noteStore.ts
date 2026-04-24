@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { HistoryEntry, NoteColor, StickyNote } from "../types";
 import { deleteNoteData, deleteNotesByCanvasData, reportPersistenceError, saveNoteData } from "../utils/storage";
+import { randomNotePreset } from "../utils/notePresets";
 
 const now = () => new Date().toISOString();
 const randomRotation = () => Math.round((Math.random() * 4 - 2) * 10) / 10;
@@ -48,21 +49,23 @@ export const useNoteStore = defineStore("note", {
       this.future = [];
     },
     createNote(canvasId: string, x: number, y: number, color: NoteColor, fontSize: number, rotationEnabled = true, content = "新便签") {
+      const preset = randomNotePreset();
       const note: StickyNote = {
         id: nanoid(),
         canvasId,
         content,
         x,
         y,
-        width: 220,
-        height: 180,
-        color,
+        width: preset.width,
+        height: preset.height,
+        color: color === "yellow" ? preset.color : color,
         rotation: rotationEnabled ? randomRotation() : 0,
         zIndex: this.maxZ + 1,
         tags: [],
         fontSize,
         fontWeight: "normal",
         textAlign: "left",
+        decoration: preset.decoration,
         createdAt: now(),
         updatedAt: now(),
       };

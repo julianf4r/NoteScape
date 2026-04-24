@@ -43,6 +43,7 @@ const baseNote = (
   fontSize,
   fontWeight: "normal",
   textAlign: "left",
+  decoration: id === "note-feedback" ? "pin" : ["note-todo", "note-timeline", "note-coffee"].includes(id) ? "tape" : "none",
   createdAt: now(),
   updatedAt: now(),
 });

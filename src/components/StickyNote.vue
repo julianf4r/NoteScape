@@ -40,6 +40,7 @@ const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
+const decoration = computed(() => props.note.decoration ?? (props.note.id === "note-feedback" ? "pin" : ["note-todo", "note-timeline", "note-coffee"].includes(props.note.id) ? "tape" : "none"));
 
 function textToDoc(text: string): JSONContent {
   return {
@@ -205,8 +206,8 @@ function setFontSize(event: Event) {
     @dblclick.stop="emit('edit')"
     @contextmenu.prevent.stop="emit('context', $event)"
   >
-    <div v-if="props.note.id === 'note-feedback'" class="pin"><Pin :size="22" /></div>
-    <div v-if="['note-todo', 'note-timeline', 'note-coffee'].includes(props.note.id)" class="tape"></div>
+    <div v-if="decoration === 'pin'" class="pin"><Pin :size="22" /></div>
+    <div v-if="decoration === 'tape'" class="tape"></div>
 
     <EditorContent v-if="props.editing" class="editor-content" :editor="editor" @mousedown.stop @keydown.esc.capture.prevent.stop="saveEdit" />
     <div v-else class="content">
