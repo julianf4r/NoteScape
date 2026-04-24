@@ -641,12 +641,20 @@ function selectSearchCanvas(id: string) {
 .settings {
   margin-top: auto;
   grid-template-columns: 22px 1fr;
+  justify-items: start;
 }
 
 .settings.compact {
-  width: 38px;
+  width: 42px;
+  height: 42px;
   grid-template-columns: 1fr;
   padding: 0;
+  justify-items: center;
+  justify-self: center;
+}
+
+.settings.compact svg {
+  justify-self: center;
 }
 
 .empty {
