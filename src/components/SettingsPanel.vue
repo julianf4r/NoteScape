@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { Download, RotateCcw, Upload, X } from "lucide-vue-next";
+import { Download, Upload, X } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../stores/appStore";
@@ -68,13 +68,6 @@ async function importFromFile() {
     dataMessage.value = error instanceof Error ? error.message : String(error);
     feedback.notify(`导入失败：${dataMessage.value}`, "error");
   }
-}
-
-async function resetData() {
-  if (!feedback.confirm("重置示例数据会覆盖当前数据库中的内容，是否继续？")) return;
-  await appStore.resetSampleData();
-  dataMessage.value = "示例数据已重置";
-  feedback.notify(dataMessage.value, "success");
 }
 
 async function chooseDatabase() {
@@ -210,7 +203,6 @@ async function restoreDatabase() {
         <div class="actions">
           <button @click="exportData"><Download :size="16" />导出</button>
           <button @click="importFromFile"><Upload :size="16" />导入文件</button>
-          <button @click="resetData"><RotateCcw :size="16" />重置示例</button>
         </div>
         <textarea v-model="importText" placeholder="粘贴 JSON 数据后点击下方按钮导入"></textarea>
         <button class="wide-action" @click="importData">导入粘贴的数据</button>
@@ -318,7 +310,7 @@ input[type="number"] {
 
 .actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
   margin-bottom: 10px;
 }

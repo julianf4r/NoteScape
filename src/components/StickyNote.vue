@@ -40,7 +40,7 @@ const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
-const decoration = computed(() => props.note.decoration ?? (props.note.id === "note-feedback" ? "pin" : ["note-todo", "note-timeline", "note-coffee"].includes(props.note.id) ? "tape" : "none"));
+const decoration = computed(() => props.note.decoration ?? "none");
 
 function textToDoc(text: string): JSONContent {
   return {

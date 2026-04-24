@@ -58,11 +58,6 @@ export const useAppStore = defineStore("app", {
         useFeedbackStore().notify(`保存失败：${this.statusMessage}`, "error");
       }
     },
-    async resetSampleData() {
-      const data = createDefaultData();
-      this.applyData(data);
-      await this.persist(true);
-    },
     exportData() {
       return JSON.stringify(this.snapshot(), null, 2);
     },
