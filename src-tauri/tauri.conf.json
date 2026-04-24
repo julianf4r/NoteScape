@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "note-scape",
+  "productName": "贴境",
   "version": "0.1.0",
   "identifier": "top.volan.note-scape",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "note-scape",
-        "width": 800,
-        "height": 600
+        "title": "贴境",
+        "width": 1400,
+        "height": 1050,
+        "minWidth": 1000,
+        "minHeight": 720
       }
     ],
     "security": {

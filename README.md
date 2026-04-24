@@ -1,7 +1,13 @@
-# Tauri + Vue + TypeScript
+# 贴境 NoteScape
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Windows 桌面端便签画布应用，基于 Tauri 2、Vue 3、TypeScript、Pinia 和 pnpm 开发。
 
-## Recommended IDE Setup
+## 开发命令
 
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+```bash
+pnpm install
+pnpm tauri dev
+pnpm tauri build
+```
+
+当前版本使用 `localStorage` 持久化数据，键名为 `sticky-canvas-data`。
