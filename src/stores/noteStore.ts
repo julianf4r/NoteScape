@@ -132,11 +132,70 @@ export const useNoteStore = defineStore("note", {
       this.addHistory({ type: "create", after: { ...copy } });
       void saveNoteData(copy);
     },
+    duplicateSelected() {
+      const selected = this.notes.filter((note) => this.selectedIds.includes(note.id));
+      if (!selected.length) return;
+      const copies = selected.map((note, index) => ({
+        ...note,
+        id: nanoid(),
+        x: note.x + 28 + index * 8,
+        y: note.y + 28 + index * 8,
+        zIndex: this.maxZ + index + 1,
+        createdAt: now(),
+        updatedAt: now(),
+      }));
+      this.notes.push(...copies);
+      this.selectedIds = copies.map((note) => note.id);
+      copies.forEach((note) => {
+        this.addHistory({ type: "create", after: { ...note } });
+        void saveNoteData(note);
+      });
+    },
+    deleteSelected() {
+      const ids = [...this.selectedIds];
+      ids.forEach((id) => this.deleteNote(id));
+    },
+    bringSelectedToFront() {
+      const selected = this.notes.filter((note) => this.selectedIds.includes(note.id));
+      selected.forEach((note, index) => this.updateNote(note.id, { zIndex: this.maxZ + index + 1 }));
+    },
+    updateSelected(patch: Partial<StickyNote>) {
+      this.selectedIds.forEach((id) => this.updateNote(id, patch));
+    },
+    toggleTagForSelected(tagId: string) {
+      this.selectedIds.forEach((id) => this.toggleTagForNote(id, tagId));
+    },
+    moveSelectedBy(deltaX: number, deltaY: number, beforeNotes: StickyNote[]) {
+      beforeNotes.forEach((before) => {
+        const note = this.notes.find((item) => item.id === before.id);
+        if (!note) return;
+        note.x = before.x + deltaX;
+        note.y = before.y + deltaY;
+        note.updatedAt = now();
+      });
+    },
+    commitSelectedMove(beforeNotes: StickyNote[]) {
+      beforeNotes.forEach((before) => {
+        const note = this.notes.find((item) => item.id === before.id);
+        if (!note) return;
+        if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
+        void saveNoteData(note);
+      });
+    },
     bringToFront(id: string) {
       this.updateNote(id, { zIndex: this.maxZ + 1 });
     },
     select(id: string, additive = false) {
-      this.selectedIds = additive ? Array.from(new Set([...this.selectedIds, id])) : [id];
+      if (!additive) {
+        this.selectedIds = [id];
+        return;
+      }
+      this.selectedIds = this.selectedIds.includes(id)
+        ? this.selectedIds.filter((item) => item !== id)
+        : [...this.selectedIds, id];
+    },
+    setSelection(ids: string[]) {
+      this.selectedIds = Array.from(new Set(ids));
     },
     clearSelection() {
       this.selectedIds = [];

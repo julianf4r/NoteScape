@@ -22,6 +22,8 @@ const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
 const contextMenu = ref<{ x: number; y: number; noteId?: string } | null>(null);
 const highlightedNoteId = ref("");
+const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
+const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
 let highlightTimer: number | undefined;
 
 const visibleNotes = computed(() =>
@@ -111,7 +113,13 @@ function stopPan() {
 function onBoardMouseDown(event: MouseEvent) {
   contextMenu.value = null;
   if (noteStore.editingId && (event.target as HTMLElement).classList.contains("canvas-board")) noteStore.stopEditing();
-  if ((event.target as HTMLElement).classList.contains("canvas-board")) noteStore.clearSelection();
+  if ((event.target as HTMLElement).classList.contains("canvas-board")) {
+    if (event.shiftKey || event.ctrlKey) {
+      startBoxSelect(event);
+    } else {
+      noteStore.clearSelection();
+    }
+  }
   startPan(event);
 }
 
@@ -129,6 +137,109 @@ function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __b
   if (__before) noteStore.commitNoteChange(__before, cleanPatch);
   else noteStore.updateNote(note.id, cleanPatch, track);
 }
+
+function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
+  const additive = event.shiftKey || event.ctrlKey;
+  if (!noteStore.selectedIds.includes(note.id)) noteStore.select(note.id, additive);
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id)) {
+    groupDrag.value = {
+      startX: event.clientX,
+      startY: event.clientY,
+      before: noteStore.notes.filter((item) => noteStore.selectedIds.includes(item.id)).map((item) => ({ ...item, tags: [...item.tags] })),
+    };
+    window.addEventListener("mousemove", dragGroup);
+    window.addEventListener("mouseup", endGroupDrag, { once: true });
+  }
+}
+
+function dragGroup(event: MouseEvent) {
+  if (!groupDrag.value) return;
+  noteStore.moveSelectedBy((event.clientX - groupDrag.value.startX) / viewport.scale, (event.clientY - groupDrag.value.startY) / viewport.scale, groupDrag.value.before);
+}
+
+function endGroupDrag() {
+  window.removeEventListener("mousemove", dragGroup);
+  if (groupDrag.value) noteStore.commitSelectedMove(groupDrag.value.before);
+  groupDrag.value = null;
+}
+
+function deleteSelection(noteId: string) {
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.deleteSelected();
+  else noteStore.deleteNote(noteId);
+}
+
+function duplicateSelection(noteId: string) {
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.duplicateSelected();
+  else noteStore.duplicateNote(noteId);
+}
+
+function bringSelectionToFront(noteId: string) {
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.bringSelectedToFront();
+  else noteStore.bringToFront(noteId);
+}
+
+function updateSelection(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id) && !patch.__before) {
+    noteStore.updateSelected(patch);
+    return;
+  }
+  updateNote(note, patch, track);
+}
+
+function toggleTagForSelection(noteId: string, tagId: string) {
+  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.toggleTagForSelected(tagId);
+  else noteStore.toggleTagForNote(noteId, tagId);
+}
+
+function startBoxSelect(event: MouseEvent) {
+  if (!board.value) return;
+  const rect = board.value.getBoundingClientRect();
+  boxSelect.value = {
+    startX: event.clientX - rect.left,
+    startY: event.clientY - rect.top,
+    currentX: event.clientX - rect.left,
+    currentY: event.clientY - rect.top,
+  };
+  window.addEventListener("mousemove", updateBoxSelect);
+  window.addEventListener("mouseup", finishBoxSelect, { once: true });
+}
+
+function updateBoxSelect(event: MouseEvent) {
+  if (!boxSelect.value || !board.value) return;
+  const rect = board.value.getBoundingClientRect();
+  boxSelect.value.currentX = event.clientX - rect.left;
+  boxSelect.value.currentY = event.clientY - rect.top;
+}
+
+function finishBoxSelect() {
+  window.removeEventListener("mousemove", updateBoxSelect);
+  if (!boxSelect.value) return;
+  const left = Math.min(boxSelect.value.startX, boxSelect.value.currentX);
+  const top = Math.min(boxSelect.value.startY, boxSelect.value.currentY);
+  const right = Math.max(boxSelect.value.startX, boxSelect.value.currentX);
+  const bottom = Math.max(boxSelect.value.startY, boxSelect.value.currentY);
+  const selected = visibleNotes.value.filter((note) => {
+    const noteLeft = note.x * viewport.scale + viewport.offsetX;
+    const noteTop = note.y * viewport.scale + viewport.offsetY;
+    const noteRight = noteLeft + note.width * viewport.scale;
+    const noteBottom = noteTop + note.height * viewport.scale;
+    return noteRight >= left && noteLeft <= right && noteBottom >= top && noteTop <= bottom;
+  });
+  noteStore.setSelection(selected.map((note) => note.id));
+  boxSelect.value = null;
+}
+
+const boxSelectStyle = computed(() => {
+  if (!boxSelect.value) return {};
+  const left = Math.min(boxSelect.value.startX, boxSelect.value.currentX);
+  const top = Math.min(boxSelect.value.startY, boxSelect.value.currentY);
+  return {
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${Math.abs(boxSelect.value.currentX - boxSelect.value.startX)}px`,
+    height: `${Math.abs(boxSelect.value.currentY - boxSelect.value.startY)}px`,
+  };
+});
 
 function jumpMiniMap(x: number, y: number) {
   const rect = board.value?.getBoundingClientRect();
@@ -219,18 +330,20 @@ onUnmounted(() => {
         :tags="tagStore.tags"
         :search-query="canvasStore.searchQuery"
         :highlighted="highlightedNoteId === note.id"
-        @select="noteStore.select(note.id, $event.shiftKey)"
+        @select="onNotePointerDown($event, note)"
         @edit="noteStore.editingId = note.id"
-        @update="(patch, track) => updateNote(note, patch, track)"
+        @update="(patch, track) => updateSelection(note, patch, track)"
         @live="(patch) => noteStore.patchNoteLive(note.id, patch)"
-        @delete="noteStore.deleteNote(note.id)"
-        @duplicate="noteStore.duplicateNote(note.id)"
-        @front="noteStore.bringToFront(note.id)"
+        @delete="deleteSelection(note.id)"
+        @duplicate="duplicateSelection(note.id)"
+        @front="bringSelectionToFront(note.id)"
         @context="(event) => openNoteMenu(event, note.id)"
         @editing-done="noteStore.stopEditing()"
-        @toggle-tag="(tagId) => noteStore.toggleTagForNote(note.id, tagId)"
+        @toggle-tag="(tagId) => toggleTagForSelection(note.id, tagId)"
       />
     </div>
+
+    <div v-if="boxSelect" class="selection-box" :style="boxSelectStyle"></div>
 
     <CanvasToolbar
       :scale="viewport.scale"
@@ -250,9 +363,9 @@ onUnmounted(() => {
     <div v-if="contextMenu" class="menu-popover" :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }">
       <template v-if="contextMenu.noteId">
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
-        <button @click="noteStore.duplicateNote(contextMenu!.noteId!); contextMenu = null">复制</button>
-        <button @click="noteStore.bringToFront(contextMenu!.noteId!); contextMenu = null">置顶</button>
-        <button @click="noteStore.deleteNote(contextMenu!.noteId!); contextMenu = null">删除</button>
+        <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制</button>
+        <button @click="bringSelectionToFront(contextMenu!.noteId!); contextMenu = null">置顶</button>
+        <button @click="deleteSelection(contextMenu!.noteId!); contextMenu = null">删除</button>
       </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
@@ -302,5 +415,13 @@ onUnmounted(() => {
   border: 1px solid #eceff3;
   border-radius: 8px;
   transform: translate(-50%, -50%);
+}
+
+.selection-box {
+  position: absolute;
+  z-index: 40;
+  pointer-events: none;
+  border: 1px solid rgba(59, 130, 246, 0.85);
+  background: rgba(59, 130, 246, 0.12);
 }
 </style>
