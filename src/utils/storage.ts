@@ -108,6 +108,46 @@ export async function saveData(data: AppData) {
   await invoke("save_app_data", { data: JSON.stringify(data) });
 }
 
+export async function saveCanvasData(canvas: CanvasItem) {
+  await invoke("save_canvas", { canvas: JSON.stringify(canvas) });
+}
+
+export async function deleteCanvasData(id: string, deletedAt: string) {
+  await invoke("delete_canvas", { id, deletedAt });
+}
+
+export async function restoreCanvasData(id: string, updatedAt: string) {
+  await invoke("restore_canvas", { id, updatedAt });
+}
+
+export async function removeCanvasForeverData(id: string) {
+  await invoke("remove_canvas_forever", { id });
+}
+
+export async function saveNoteData(note: StickyNote) {
+  await invoke("save_note", { note: JSON.stringify(note) });
+}
+
+export async function deleteNoteData(id: string) {
+  await invoke("delete_note", { id });
+}
+
+export async function deleteNotesByCanvasData(canvasId: string) {
+  await invoke("delete_notes_by_canvas", { canvasId });
+}
+
+export async function saveTagData(tag: TagItem) {
+  await invoke("save_tag", { tag: JSON.stringify(tag) });
+}
+
+export async function deleteTagData(id: string) {
+  await invoke("delete_tag", { id });
+}
+
+export async function saveSettingsData(settings: AppSettings) {
+  await invoke("save_app_settings", { settings: JSON.stringify(settings) });
+}
+
 export async function switchDatabase(dbPath: string, fallbackData: AppData): Promise<DatabaseLoadResult> {
   return invoke<DatabaseLoadResult>("set_database_path", {
     dbPath,

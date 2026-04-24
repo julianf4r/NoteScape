@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { TagItem } from "../types";
+import { deleteTagData, saveTagData } from "../utils/storage";
 
 const palette = ["#3b82f6", "#22c55e", "#facc15", "#8b5cf6", "#ec4899"];
 
@@ -25,19 +26,27 @@ export const useTagStore = defineStore("tag", {
         createdAt: new Date().toISOString(),
       };
       this.tags.push(tag);
+      void saveTagData(tag);
       return tag;
     },
     renameTag(id: string, name: string) {
       const tag = this.tags.find((item) => item.id === id);
-      if (tag && name.trim()) tag.name = name.trim();
+      if (tag && name.trim()) {
+        tag.name = name.trim();
+        void saveTagData(tag);
+      }
     },
     deleteTag(id: string) {
       this.tags = this.tags.filter((item) => item.id !== id);
       if (this.activeTagId === id) this.activeTagId = "";
+      void deleteTagData(id);
     },
     updateTagColor(id: string, color: string) {
       const tag = this.tags.find((item) => item.id === id);
-      if (tag) tag.color = color;
+      if (tag) {
+        tag.color = color;
+        void saveTagData(tag);
+      }
     },
     toggleTag(id: string) {
       this.activeTagId = this.activeTagId === id ? "" : id;
@@ -45,6 +54,7 @@ export const useTagStore = defineStore("tag", {
     recalculateCounts(noteTags: string[]) {
       this.tags.forEach((tag) => {
         tag.count = noteTags.filter((id) => id === tag.id).length;
+        void saveTagData(tag);
       });
     },
   },

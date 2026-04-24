@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { HistoryEntry, NoteColor, StickyNote } from "../types";
+import { deleteNoteData, deleteNotesByCanvasData, saveNoteData } from "../utils/storage";
 
 const now = () => new Date().toISOString();
 const randomRotation = () => Math.round((Math.random() * 4 - 2) * 10) / 10;
@@ -61,6 +62,7 @@ export const useNoteStore = defineStore("note", {
       this.notes.push(note);
       this.selectedIds = [note.id];
       this.addHistory({ type: "create", after: { ...note } });
+      void saveNoteData(note);
       return note;
     },
     updateNote(id: string, patch: Partial<StickyNote>, track = true) {
@@ -69,12 +71,14 @@ export const useNoteStore = defineStore("note", {
       const before = { ...note };
       Object.assign(note, patch, { updatedAt: now() });
       if (track && hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
+      void saveNoteData(note);
     },
     commitNoteChange(before: StickyNote, patch: Partial<StickyNote>) {
       const note = this.notes.find((item) => item.id === before.id);
       if (!note) return;
       Object.assign(note, patch, { updatedAt: now() });
       if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
+      void saveNoteData(note);
     },
     patchNoteLive(id: string, patch: Partial<StickyNote>) {
       const note = this.notes.find((item) => item.id === id);
@@ -86,16 +90,19 @@ export const useNoteStore = defineStore("note", {
       this.notes = this.notes.filter((item) => item.id !== id);
       this.selectedIds = this.selectedIds.filter((item) => item !== id);
       this.addHistory({ type: "delete", before: { ...note } });
+      void deleteNoteData(id);
     },
     removeNotesByCanvas(canvasId: string) {
       this.notes = this.notes.filter((note) => note.canvasId !== canvasId);
       this.selectedIds = this.selectedIds.filter((id) => this.notes.some((note) => note.id === id));
       if (this.editingId && !this.notes.some((note) => note.id === this.editingId)) this.editingId = "";
+      void deleteNotesByCanvasData(canvasId);
     },
     removeTagFromAll(tagId: string) {
       this.notes.forEach((note) => {
         note.tags = note.tags.filter((id) => id !== tagId);
         note.updatedAt = now();
+        void saveNoteData(note);
       });
     },
     toggleTagForNote(noteId: string, tagId: string) {
@@ -106,6 +113,7 @@ export const useNoteStore = defineStore("note", {
       note.tags = exists ? note.tags.filter((id) => id !== tagId) : [...note.tags, tagId];
       note.updatedAt = now();
       this.addHistory({ type: "update", before, after: { ...note, tags: [...note.tags] } });
+      void saveNoteData(note);
     },
     duplicateNote(id: string) {
       const note = this.notes.find((item) => item.id === id);
@@ -122,6 +130,7 @@ export const useNoteStore = defineStore("note", {
       this.notes.push(copy);
       this.selectedIds = [copy.id];
       this.addHistory({ type: "create", after: { ...copy } });
+      void saveNoteData(copy);
     },
     bringToFront(id: string) {
       this.updateNote(id, { zIndex: this.maxZ + 1 });
@@ -139,22 +148,40 @@ export const useNoteStore = defineStore("note", {
     undo() {
       const entry = this.history.pop();
       if (!entry) return;
-      if (entry.type === "create" && entry.after) this.notes = this.notes.filter((note) => note.id !== entry.after?.id);
-      if (entry.type === "delete" && entry.before) this.notes.push(entry.before);
+      if (entry.type === "create" && entry.after) {
+        this.notes = this.notes.filter((note) => note.id !== entry.after?.id);
+        void deleteNoteData(entry.after.id);
+      }
+      if (entry.type === "delete" && entry.before) {
+        this.notes.push(entry.before);
+        void saveNoteData(entry.before);
+      }
       if (entry.type === "update" && entry.before) {
         const index = this.notes.findIndex((note) => note.id === entry.before?.id);
-        if (index >= 0) this.notes[index] = entry.before;
+        if (index >= 0) {
+          this.notes[index] = entry.before;
+          void saveNoteData(entry.before);
+        }
       }
       this.future.push(entry);
     },
     redo() {
       const entry = this.future.pop();
       if (!entry) return;
-      if (entry.type === "create" && entry.after) this.notes.push(entry.after);
-      if (entry.type === "delete" && entry.before) this.notes = this.notes.filter((note) => note.id !== entry.before?.id);
+      if (entry.type === "create" && entry.after) {
+        this.notes.push(entry.after);
+        void saveNoteData(entry.after);
+      }
+      if (entry.type === "delete" && entry.before) {
+        this.notes = this.notes.filter((note) => note.id !== entry.before?.id);
+        void deleteNoteData(entry.before.id);
+      }
       if (entry.type === "update" && entry.after) {
         const index = this.notes.findIndex((note) => note.id === entry.after?.id);
-        if (index >= 0) this.notes[index] = entry.after;
+        if (index >= 0) {
+          this.notes[index] = entry.after;
+          void saveNoteData(entry.after);
+        }
       }
       this.history.push(entry);
     },

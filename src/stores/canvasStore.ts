@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { CanvasItem } from "../types";
+import { deleteCanvasData, removeCanvasForeverData, restoreCanvasData, saveCanvasData } from "../utils/storage";
 
 const now = () => new Date().toISOString();
 
@@ -30,6 +31,7 @@ export const useCanvasStore = defineStore("canvas", {
       };
       this.canvases.unshift(canvas);
       this.currentCanvasId = canvas.id;
+      void saveCanvasData(canvas);
       return canvas;
     },
     selectCanvas(id: string) {
@@ -40,22 +42,31 @@ export const useCanvasStore = defineStore("canvas", {
       if (canvas && name.trim()) {
         canvas.name = name.trim();
         canvas.updatedAt = now();
+        void saveCanvasData(canvas);
       }
     },
     deleteCanvas(id: string) {
       const canvas = this.canvases.find((item) => item.id === id);
       if (!canvas) return;
-      canvas.deletedAt = now();
+      const deletedAt = now();
+      canvas.deletedAt = deletedAt;
+      canvas.updatedAt = deletedAt;
+      void deleteCanvasData(id, deletedAt);
       if (this.currentCanvasId === id) {
         this.currentCanvasId = this.canvases.find((item) => !item.deletedAt)?.id ?? "";
       }
     },
     restoreCanvas(id: string) {
       const canvas = this.canvases.find((item) => item.id === id);
-      if (canvas) canvas.deletedAt = null;
+      if (canvas) {
+        canvas.deletedAt = null;
+        canvas.updatedAt = now();
+        void restoreCanvasData(id, canvas.updatedAt);
+      }
     },
     removeForever(id: string) {
       this.canvases = this.canvases.filter((item) => item.id !== id);
+      void removeCanvasForeverData(id);
     },
   },
 });

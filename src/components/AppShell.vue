@@ -60,12 +60,12 @@ onMounted(() => {
 onUnmounted(() => window.removeEventListener("keydown", onKeydown));
 
 watch(
-  () => [canvasStore.canvases, noteStore.notes, tagStore.tags, settingsStore.settings],
-  () => appStore.persist(),
-  { deep: true },
+  noteTags,
+  (tags) => {
+    if (appStore.loaded) tagStore.recalculateCounts(tags);
+  },
+  { immediate: true },
 );
-
-watch(noteTags, (tags) => tagStore.recalculateCounts(tags), { immediate: true });
 </script>
 
 <template>

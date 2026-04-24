@@ -344,6 +344,135 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
     tx.commit().map_err(|error| error.to_string())
 }
 
+fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            description = excluded.description,
+            updated_at = excluded.updated_at,
+            deleted_at = excluded.deleted_at",
+        params![
+            canvas.id,
+            canvas.name,
+            canvas.description,
+            canvas.created_at,
+            canvas.updated_at,
+            canvas.deleted_at
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn upsert_tag(conn: &Connection, tag: &TagItem) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO tags (id, name, color, count, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)
+         ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            color = excluded.color,
+            count = excluded.count",
+        params![tag.id, tag.name, tag.color, tag.count, tag.created_at],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO notes (
+            id, canvas_id, title, content, x, y, width, height, color, rotation, z_index,
+            font_size, font_weight, text_align, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+        ON CONFLICT(id) DO UPDATE SET
+            canvas_id = excluded.canvas_id,
+            title = excluded.title,
+            content = excluded.content,
+            x = excluded.x,
+            y = excluded.y,
+            width = excluded.width,
+            height = excluded.height,
+            color = excluded.color,
+            rotation = excluded.rotation,
+            z_index = excluded.z_index,
+            font_size = excluded.font_size,
+            font_weight = excluded.font_weight,
+            text_align = excluded.text_align,
+            updated_at = excluded.updated_at",
+        params![
+            note.id,
+            note.canvas_id,
+            note.title,
+            note.content,
+            note.x,
+            note.y,
+            note.width,
+            note.height,
+            note.color,
+            note.rotation,
+            note.z_index,
+            note.font_size,
+            note.font_weight,
+            note.text_align,
+            note.created_at,
+            note.updated_at
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+
+    tx.execute("DELETE FROM note_tags WHERE note_id = ?1", params![note.id])
+        .map_err(|error| error.to_string())?;
+    for tag_id in &note.tags {
+        tx.execute(
+            "INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?1, ?2)",
+            params![note.id, tag_id],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
+    tx.execute(
+        "DELETE FROM checklist_items WHERE note_id = ?1",
+        params![note.id],
+    )
+    .map_err(|error| error.to_string())?;
+    if let Some(items) = &note.checked_items {
+        for (index, item) in items.iter().enumerate() {
+            tx.execute(
+                "INSERT INTO checklist_items (id, note_id, text, checked, sort_order)
+                 VALUES (?1, ?2, ?3, ?4, ?5)",
+                params![item.id, note.id, item.text, item.checked as i64, index as i64],
+            )
+            .map_err(|error| error.to_string())?;
+        }
+    }
+
+    tx.commit().map_err(|error| error.to_string())
+}
+
+fn save_settings(conn: &Connection, settings: &AppSettings) -> Result<(), String> {
+    let entries = [
+        ("theme", settings.theme.clone()),
+        ("default_note_color", settings.default_note_color.clone()),
+        ("default_font_size", settings.default_font_size.to_string()),
+        ("show_grid", bool_to_text(settings.show_grid).to_string()),
+        ("random_rotation", bool_to_text(settings.random_rotation).to_string()),
+        ("note_shadow", bool_to_text(settings.note_shadow).to_string()),
+        ("auto_save", bool_to_text(settings.auto_save).to_string()),
+    ];
+    for (key, value) in entries {
+        conn.execute(
+            "INSERT INTO app_meta (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
 fn load_structured_data(conn: &Connection) -> Result<AppData, String> {
     let version = meta_value(conn, "version")?
         .and_then(|value| value.parse::<i64>().ok())
@@ -573,6 +702,98 @@ fn save_app_data(app: AppHandle, data: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn save_canvas(app: AppHandle, canvas: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    let canvas: CanvasItem = serde_json::from_str(&canvas).map_err(|error| error.to_string())?;
+    upsert_canvas(&conn, &canvas)
+}
+
+#[tauri::command]
+fn delete_canvas(app: AppHandle, id: String, deleted_at: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    conn.execute(
+        "UPDATE canvases SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
+        params![deleted_at, id],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn restore_canvas(app: AppHandle, id: String, updated_at: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    conn.execute(
+        "UPDATE canvases SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
+        params![updated_at, id],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn remove_canvas_forever(app: AppHandle, id: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    conn.execute("DELETE FROM canvases WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn save_note(app: AppHandle, note: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let mut conn = open_database(&db_path)?;
+    let note: StickyNote = serde_json::from_str(&note).map_err(|error| error.to_string())?;
+    upsert_note(&mut conn, &note)
+}
+
+#[tauri::command]
+fn delete_note(app: AppHandle, id: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    conn.execute("DELETE FROM notes WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_notes_by_canvas(app: AppHandle, canvas_id: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    conn.execute("DELETE FROM notes WHERE canvas_id = ?1", params![canvas_id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn save_tag(app: AppHandle, tag: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    let tag: TagItem = serde_json::from_str(&tag).map_err(|error| error.to_string())?;
+    upsert_tag(&conn, &tag)
+}
+
+#[tauri::command]
+fn delete_tag(app: AppHandle, id: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+fn save_app_settings(app: AppHandle, settings: String) -> Result<(), String> {
+    let db_path = read_database_path(&app)?;
+    let conn = open_database(&db_path)?;
+    let settings: AppSettings = serde_json::from_str(&settings).map_err(|error| error.to_string())?;
+    save_settings(&conn, &settings)
+}
+
+#[tauri::command]
 fn set_database_path(
     app: AppHandle,
     db_path: String,
@@ -595,7 +816,17 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_app_data,
             save_app_data,
-            set_database_path
+            set_database_path,
+            save_canvas,
+            delete_canvas,
+            restore_canvas,
+            remove_canvas_forever,
+            save_note,
+            delete_note,
+            delete_notes_by_canvas,
+            save_tag,
+            delete_tag,
+            save_app_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -90,37 +90,37 @@
 
 ## P4：SQLite 数据层升级
 
-- [ ] 拆分后端增量命令
-  - [ ] `create_canvas`
-  - [ ] `rename_canvas`
-  - [ ] `delete_canvas`
-  - [ ] `restore_canvas`
-  - [ ] `remove_canvas_forever`
-  - [ ] `create_note`
-  - [ ] `update_note`
-  - [ ] `delete_note`
-  - [ ] `duplicate_note`
-  - [ ] `move_note`
-  - [ ] `resize_note`
-  - [ ] `create_tag`
-  - [ ] `rename_tag`
-  - [ ] `delete_tag`
-  - [ ] `attach_tag_to_note`
-  - [ ] `detach_tag_from_note`
-  - [ ] `update_settings`
-- [ ] 前端 store 改为调用增量命令
-  - [ ] 不再每次保存完整 `AppData`
-  - [ ] 拖拽过程中只改内存
-  - [ ] mouseup 后只写对应 note 的位置
-  - [ ] 设置变化只写 settings
-  - [ ] 标签变化只写 tags/note_tags
-- [ ] 数据库迁移机制
+- [~] 拆分后端增量命令
+  - [x] `create_canvas`
+  - [x] `rename_canvas`
+  - [x] `delete_canvas`
+  - [x] `restore_canvas`
+  - [x] `remove_canvas_forever`
+  - [x] `create_note`
+  - [x] `update_note`
+  - [x] `delete_note`
+  - [x] `duplicate_note`
+  - [x] `move_note`
+  - [x] `resize_note`
+  - [x] `create_tag`
+  - [x] `rename_tag`
+  - [x] `delete_tag`
+  - [~] `attach_tag_to_note`
+  - [~] `detach_tag_from_note`
+  - [x] `update_settings`
+- [x] 前端 store 改为调用增量命令
+  - [x] 不再每次保存完整 `AppData`
+  - [x] 拖拽过程中只改内存
+  - [x] mouseup 后只写对应 note 的位置
+  - [x] 设置变化只写 settings
+  - [x] 标签变化只写 tags/note_tags
+- [~] 数据库迁移机制
   - [ ] 增加 schema version
   - [ ] 启动时检查版本
   - [ ] 后续字段变化走 migration
-  - [ ] 保留旧 `app_state(data)` 迁移兼容
-- [ ] 错误处理和事务
-  - [ ] 每个写操作使用事务
+  - [x] 保留旧 `app_state(data)` 迁移兼容
+- [~] 错误处理和事务
+  - [x] 每个写操作使用事务
   - [ ] 写失败回滚 UI 或提示用户
   - [ ] 数据库不可写、路径不存在、文件损坏时给出明确提示
 
