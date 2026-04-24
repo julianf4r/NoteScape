@@ -7,6 +7,7 @@ import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
+import packageInfo from "../../package.json";
 
 const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
@@ -19,6 +20,8 @@ const showTrash = ref(false);
 const renamingTagId = ref("");
 const tagDraft = ref("");
 const tagColorDraft = ref("#3b82f6");
+const collapsed = ref(false);
+const appVersion = packageInfo.version;
 
 const filteredCanvases = computed(() => {
   const query = canvasStore.searchQuery.trim().toLowerCase();
@@ -169,14 +172,21 @@ function selectSearchCanvas(id: string) {
 </script>
 
 <template>
-  <aside class="sidebar">
-    <button class="menu icon-button" title="菜单">
-      <Menu :size="22" />
-    </button>
+  <aside class="sidebar" :class="{ collapsed }">
+    <div class="brand-row">
+      <button class="menu icon-button" title="收起/展开侧边栏" @click="collapsed = !collapsed">
+        <Menu :size="22" />
+      </button>
+      <div v-if="!collapsed" class="brand">
+        <strong>贴境</strong>
+        <span>v{{ appVersion }}</span>
+      </div>
+    </div>
 
-    <SearchBox v-model="canvasStore.searchQuery" />
+    <template v-if="!collapsed">
+      <SearchBox v-model="canvasStore.searchQuery" />
 
-    <section v-if="canvasStore.searchQuery.trim()" class="search-results">
+      <section v-if="canvasStore.searchQuery.trim()" class="search-results">
       <template v-if="hasSearchResults">
         <div v-if="searchResults.canvases.length" class="result-group">
           <h3>画布</h3>
@@ -202,9 +212,9 @@ function selectSearchCanvas(id: string) {
         </div>
       </template>
       <div v-else class="empty small">没有匹配结果</div>
-    </section>
+      </section>
 
-    <section class="section">
+      <section class="section">
       <div class="section-title">
         <span>画布</span>
         <button class="new-button" @click="createCanvas"><Plus :size="15" />新建</button>
@@ -254,9 +264,9 @@ function selectSearchCanvas(id: string) {
           <button title="永久删除" @click="removeForever(canvas.id, canvas.name)"><X :size="14" /></button>
         </div>
       </div>
-    </section>
+      </section>
 
-    <section class="section tags">
+      <section class="section tags">
       <div class="section-title">
         <span>标签</span>
         <button class="small-add" @click="createTag"><Plus :size="18" /></button>
@@ -296,11 +306,12 @@ function selectSearchCanvas(id: string) {
           <button title="删除" @click.stop="deleteTag(tag.id, tag.name)"><Trash2 :size="14" /></button>
         </span>
       </button>
-    </section>
+      </section>
+    </template>
 
-    <button class="settings" @click="settingsStore.togglePanel()">
+    <button class="settings" :class="{ compact: collapsed }" @click="settingsStore.togglePanel()">
       <Settings :size="17" />
-      <span>设置</span>
+      <span v-if="!collapsed">设置</span>
     </button>
   </aside>
 </template>
@@ -315,10 +326,41 @@ function selectSearchCanvas(id: string) {
   padding: 18px 12px 16px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
+  transition: width 0.18s ease, padding 0.18s ease;
 }
 
-.menu {
+.sidebar.collapsed {
+  width: 64px;
+  align-items: center;
+  padding: 18px 10px 16px;
+}
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
   margin: 0 0 10px 0;
+}
+
+.brand {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.brand strong {
+  color: #1f2937;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.brand span {
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .section {
@@ -599,6 +641,12 @@ function selectSearchCanvas(id: string) {
 .settings {
   margin-top: auto;
   grid-template-columns: 22px 1fr;
+}
+
+.settings.compact {
+  width: 38px;
+  grid-template-columns: 1fr;
+  padding: 0;
 }
 
 .empty {
