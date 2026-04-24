@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import { Download, RotateCcw, Upload, X } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColorList, noteColors } from "../utils/colors";
@@ -12,6 +13,7 @@ const settingsStore = useSettingsStore();
 const importText = ref("");
 const exported = ref("");
 const dbMessage = ref("");
+const dataMessage = ref("");
 
 const settings = computed(() => settingsStore.settings);
 
@@ -19,14 +21,50 @@ function setColor(color: NoteColor) {
   settingsStore.updateSettings({ defaultNoteColor: color });
 }
 
-function exportData() {
-  exported.value = appStore.exportData();
+async function exportData() {
+  const selected = await save({
+    defaultPath: "notescape-data.json",
+    filters: [{ name: "JSON 数据", extensions: ["json"] }],
+  });
+  if (!selected) return;
+  try {
+    await writeTextFile(selected, appStore.exportData());
+    dataMessage.value = "数据已导出";
+  } catch (error) {
+    dataMessage.value = error instanceof Error ? error.message : String(error);
+  }
 }
 
 function importData() {
   if (!importText.value.trim()) return;
-  appStore.importData(importText.value);
-  importText.value = "";
+  try {
+    appStore.importData(importText.value);
+    importText.value = "";
+    dataMessage.value = "数据已导入";
+  } catch (error) {
+    dataMessage.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function importFromFile() {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "JSON 数据", extensions: ["json"] }],
+  });
+  if (typeof selected !== "string") return;
+  try {
+    appStore.importData(await readTextFile(selected));
+    dataMessage.value = "数据已导入";
+  } catch (error) {
+    dataMessage.value = error instanceof Error ? error.message : String(error);
+  }
+}
+
+async function resetData() {
+  if (!window.confirm("重置示例数据会覆盖当前数据库中的内容，是否继续？")) return;
+  await appStore.resetSampleData();
+  dataMessage.value = "示例数据已重置";
 }
 
 async function chooseDatabase() {
@@ -36,8 +74,12 @@ async function chooseDatabase() {
     filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
   });
   if (typeof selected !== "string") return;
-  await appStore.changeDatabase(selected);
-  dbMessage.value = "已切换数据库文件";
+  try {
+    await appStore.changeDatabase(selected);
+    dbMessage.value = "已切换数据库文件";
+  } catch (error) {
+    dbMessage.value = error instanceof Error ? error.message : String(error);
+  }
 }
 
 async function createDatabase() {
@@ -46,8 +88,12 @@ async function createDatabase() {
     filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
   });
   if (!selected) return;
-  await appStore.changeDatabase(selected);
-  dbMessage.value = "已创建并切换数据库文件";
+  try {
+    await appStore.changeDatabase(selected);
+    dbMessage.value = "已创建并切换数据库文件";
+  } catch (error) {
+    dbMessage.value = error instanceof Error ? error.message : String(error);
+  }
 }
 </script>
 
@@ -58,6 +104,7 @@ async function createDatabase() {
         <h2>设置</h2>
         <button class="icon-button" @click="settingsStore.togglePanel()"><X :size="18" /></button>
       </header>
+      <p v-if="appStore.saveStatus !== 'idle'" class="save-status" :class="appStore.saveStatus">{{ appStore.statusMessage || appStore.saveStatus }}</p>
 
       <section>
         <h3>外观</h3>
@@ -118,11 +165,13 @@ async function createDatabase() {
         <h3>数据</h3>
         <div class="actions">
           <button @click="exportData"><Download :size="16" />导出</button>
-          <button @click="importData"><Upload :size="16" />导入</button>
-          <button @click="appStore.resetSampleData()"><RotateCcw :size="16" />重置示例</button>
+          <button @click="importFromFile"><Upload :size="16" />导入文件</button>
+          <button @click="resetData"><RotateCcw :size="16" />重置示例</button>
         </div>
-        <textarea v-model="importText" placeholder="粘贴 JSON 数据后点击导入"></textarea>
+        <textarea v-model="importText" placeholder="粘贴 JSON 数据后点击下方按钮导入"></textarea>
+        <button class="wide-action" @click="importData">导入粘贴的数据</button>
         <textarea v-if="exported" v-model="exported" readonly></textarea>
+        <p v-if="dataMessage" class="hint">{{ dataMessage }}</p>
       </section>
     </aside>
   </div>
@@ -271,5 +320,37 @@ textarea {
   margin: 0;
   color: #2563eb;
   font-size: 13px;
+}
+
+.save-status {
+  margin: -6px 0 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.save-status.saved {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.save-status.saving {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.save-status.error {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.wide-action {
+  width: 100%;
+  height: 34px;
+  margin-top: 8px;
+  color: #374151;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
 }
 </style>
