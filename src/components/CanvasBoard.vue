@@ -35,6 +35,7 @@ const visibleNotes = computed(() =>
 
 const canvasClass = computed(() => ({
   "hide-grid": !settingsStore.settings.showGrid,
+  "pan-ready": handActive.value || spaceDown.value,
   panning: Boolean(panStart.value),
 }));
 
@@ -75,6 +76,20 @@ function zoomBy(delta: number, originX?: number, originY?: number) {
   saveViewport();
 }
 
+function setZoom(scale: number) {
+  const rect = board.value?.getBoundingClientRect();
+  if (!rect) {
+    viewport.scale = clamp(scale, 0.25, 3);
+    saveViewport();
+    return;
+  }
+  const world = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
+  viewport.scale = clamp(scale, 0.25, 3);
+  viewport.offsetX = rect.width / 2 - world.x * viewport.scale;
+  viewport.offsetY = rect.height / 2 - world.y * viewport.scale;
+  saveViewport();
+}
+
 function resetZoom() {
   viewport.scale = 1;
   viewport.offsetX = 0;
@@ -105,7 +120,15 @@ function onWheel(event: WheelEvent) {
   if (event.ctrlKey) {
     event.preventDefault();
     zoomBy(event.deltaY > 0 ? -0.08 : 0.08, event.clientX, event.clientY);
+    return;
   }
+  event.preventDefault();
+  if (event.shiftKey) viewport.offsetX -= event.deltaY;
+  else {
+    viewport.offsetX -= event.deltaX;
+    viewport.offsetY -= event.deltaY;
+  }
+  saveViewport();
 }
 
 function startPan(event: MouseEvent) {
@@ -425,6 +448,7 @@ watch(
       @redo="noteStore.redo"
       @zoom-in="zoomBy(0.1)"
       @zoom-out="zoomBy(-0.1)"
+      @set-zoom="setZoom"
       @reset-zoom="resetZoom"
       @toggle-hand="handActive = !handActive"
       @settings="settingsStore.togglePanel()"
@@ -495,6 +519,10 @@ watch(
 
 .canvas-board.hide-grid {
   background-image: none;
+}
+
+.canvas-board.pan-ready {
+  cursor: grab;
 }
 
 .canvas-board.panning {

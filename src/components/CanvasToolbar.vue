@@ -13,9 +13,12 @@ const emit = defineEmits<{
   zoomIn: [];
   zoomOut: [];
   resetZoom: [];
+  setZoom: [scale: number];
   toggleHand: [];
   settings: [];
 }>();
+
+const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 </script>
 
 <template>
@@ -27,7 +30,9 @@ const emit = defineEmits<{
     <button title="新建便签" @click="emit('add')"><StickyNote :size="20" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>
-    <button class="zoom" title="重置缩放" @click="emit('resetZoom')">{{ Math.round(scale * 100) }}%</button>
+    <select class="zoom" title="缩放比例" :value="scale" @change="emit('setZoom', Number(($event.target as HTMLSelectElement).value))">
+      <option v-for="option in zoomOptions" :key="option" :value="option">{{ Math.round(option * 100) }}%</option>
+    </select>
     <button title="放大" @click="emit('zoomIn')"><Plus :size="18" /></button>
     <span></span>
     <button title="设置" @click="emit('settings')"><SlidersHorizontal :size="20" /></button>
@@ -74,6 +79,13 @@ span {
 
 .zoom {
   width: 72px;
+  height: 50px;
+  padding: 0 4px;
+  color: #374151;
+  text-align: center;
+  border: 0;
+  outline: 0;
+  background: transparent;
   font-weight: 600;
 }
 </style>
