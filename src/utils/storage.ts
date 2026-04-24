@@ -1,6 +1,10 @@
 import type { AppData, AppSettings, CanvasItem, NoteColor, StickyNote, TagItem } from "../types";
+import { invoke } from "@tauri-apps/api/core";
 
-export const STORAGE_KEY = "sticky-canvas-data";
+export interface DatabaseLoadResult {
+  data: string;
+  db_path: string;
+}
 
 const now = () => new Date().toISOString();
 
@@ -82,9 +86,7 @@ export function createDefaultData(): AppData {
   };
 }
 
-export function loadData(): AppData {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return createDefaultData();
+export function parseData(raw: string): AppData {
   try {
     const parsed = JSON.parse(raw) as AppData;
     if (!parsed.version || !Array.isArray(parsed.canvases) || !Array.isArray(parsed.notes)) {
@@ -92,13 +94,25 @@ export function loadData(): AppData {
     }
     return parsed;
   } catch {
-    localStorage.setItem(`${STORAGE_KEY}-corrupt-${Date.now()}`, raw);
     return createDefaultData();
   }
 }
 
-export function saveData(data: AppData) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+export async function loadData(): Promise<DatabaseLoadResult> {
+  return invoke<DatabaseLoadResult>("load_app_data", {
+    defaultData: JSON.stringify(createDefaultData()),
+  });
+}
+
+export async function saveData(data: AppData) {
+  await invoke("save_app_data", { data: JSON.stringify(data) });
+}
+
+export async function switchDatabase(dbPath: string, fallbackData: AppData): Promise<DatabaseLoadResult> {
+  return invoke<DatabaseLoadResult>("set_database_path", {
+    dbPath,
+    fallbackData: JSON.stringify(fallbackData),
+  });
 }
 
 export function debounce<T extends (...args: never[]) => void>(fn: T, wait = 300) {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { Download, RotateCcw, Upload, X } from "lucide-vue-next";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../stores/appStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColorList, noteColors } from "../utils/colors";
@@ -10,6 +11,7 @@ const appStore = useAppStore();
 const settingsStore = useSettingsStore();
 const importText = ref("");
 const exported = ref("");
+const dbMessage = ref("");
 
 const settings = computed(() => settingsStore.settings);
 
@@ -25,6 +27,27 @@ function importData() {
   if (!importText.value.trim()) return;
   appStore.importData(importText.value);
   importText.value = "";
+}
+
+async function chooseDatabase() {
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
+  });
+  if (typeof selected !== "string") return;
+  await appStore.changeDatabase(selected);
+  dbMessage.value = "已切换数据库文件";
+}
+
+async function createDatabase() {
+  const selected = await save({
+    defaultPath: "notescape.sqlite3",
+    filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
+  });
+  if (!selected) return;
+  await appStore.changeDatabase(selected);
+  dbMessage.value = "已创建并切换数据库文件";
 }
 </script>
 
@@ -79,6 +102,16 @@ function importData() {
           <span>自动保存</span>
           <input type="checkbox" :checked="settings.autoSave" @change="settingsStore.updateSettings({ autoSave: ($event.target as HTMLInputElement).checked })" />
         </label>
+      </section>
+
+      <section>
+        <h3>数据库</h3>
+        <div class="db-path">{{ appStore.databasePath || "未加载" }}</div>
+        <div class="actions two">
+          <button @click="chooseDatabase">选择数据库</button>
+          <button @click="createDatabase">新建数据库</button>
+        </div>
+        <p v-if="dbMessage" class="hint">{{ dbMessage }}</p>
       </section>
 
       <section>
@@ -197,6 +230,10 @@ input[type="number"] {
   margin-bottom: 10px;
 }
 
+.actions.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
 .actions button {
   height: 34px;
   display: inline-flex;
@@ -215,5 +252,24 @@ textarea {
   padding: 9px;
   resize: vertical;
   font-size: 12px;
+}
+
+.db-path {
+  min-height: 38px;
+  padding: 9px 10px;
+  overflow-wrap: anywhere;
+  color: #4b5563;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-bottom: 10px;
+}
+
+.hint {
+  margin: 0;
+  color: #2563eb;
+  font-size: 13px;
 }
 </style>
