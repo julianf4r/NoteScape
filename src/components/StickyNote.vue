@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { Bold, Copy, Palette, Pin, Trash2, Type } from "lucide-vue-next";
-import type { NoteColor, StickyNote } from "../types";
+import { Bold, Copy, Palette, Pin, Tags, Trash2, Type } from "lucide-vue-next";
+import type { NoteColor, StickyNote, TagItem } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 
 const props = defineProps<{
@@ -10,6 +10,7 @@ const props = defineProps<{
   editing: boolean;
   shadow: boolean;
   scale: number;
+  tags: TagItem[];
 }>();
 
 const emit = defineEmits<{
@@ -22,12 +23,14 @@ const emit = defineEmits<{
   front: [];
   context: [event: MouseEvent];
   editingDone: [];
+  toggleTag: [tagId: string];
 }>();
 
 const textarea = ref<HTMLTextAreaElement>();
 const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
+const showTags = ref(false);
 
 const style = computed(() => ({
   left: `${props.note.x}px`,
@@ -138,8 +141,22 @@ function changeColor(color: NoteColor) {
       <button v-for="color in noteColorList" :key="color" class="swatch" :style="{ backgroundColor: noteColors[color] }" @click="changeColor(color)"></button>
       <button title="字号" @click="emit('update', { fontSize: props.note.fontSize + 1 }, true)"><Type :size="15" /></button>
       <button title="加粗" @click="emit('update', { fontWeight: props.note.fontWeight === 'bold' ? 'normal' : 'bold' }, true)"><Bold :size="15" /></button>
+      <button title="标签" :class="{ active: showTags }" @click="showTags = !showTags"><Tags :size="15" /></button>
       <button title="复制" @click="emit('duplicate')"><Copy :size="15" /></button>
       <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>
+    </div>
+
+    <div v-if="props.selected && !props.editing && showTags" class="tag-panel">
+      <button
+        v-for="tag in props.tags"
+        :key="tag.id"
+        :class="{ active: props.note.tags.includes(tag.id) }"
+        @click="emit('toggleTag', tag.id)"
+      >
+        <i :style="{ backgroundColor: tag.color }"></i>
+        <span>{{ tag.name }}</span>
+      </button>
+      <p v-if="!props.tags.length">暂无标签</p>
     </div>
 
     <span v-if="props.selected && !props.editing" class="resize-handle" @mousedown="startResize"></span>
@@ -230,6 +247,11 @@ textarea {
   background: #f1f5f9;
 }
 
+.note-actions button.active {
+  color: #1d4ed8;
+  background: #e8f1ff;
+}
+
 .note-actions .swatch {
   width: 18px;
   height: 18px;
@@ -247,6 +269,57 @@ textarea {
   border: 2px solid #fff;
   border-radius: 50%;
   cursor: nwse-resize;
+}
+
+.tag-panel {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 12px);
+  min-width: 150px;
+  max-width: 210px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+}
+
+.tag-panel button {
+  width: 100%;
+  min-height: 30px;
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  color: #374151;
+  background: transparent;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.tag-panel button:hover,
+.tag-panel button.active {
+  background: #eef2f7;
+}
+
+.tag-panel i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.tag-panel span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tag-panel p {
+  margin: 6px;
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 .tape {

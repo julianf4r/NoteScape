@@ -14,6 +14,9 @@ const settingsStore = useSettingsStore();
 const renamingId = ref("");
 const renameDraft = ref("");
 const showTrash = ref(false);
+const renamingTagId = ref("");
+const tagDraft = ref("");
+const tagColorDraft = ref("#3b82f6");
 
 const filteredCanvases = computed(() => {
   const query = canvasStore.searchQuery.trim().toLowerCase();
@@ -82,6 +85,41 @@ function removeForever(id: string, name: string) {
   noteStore.removeNotesByCanvas(id);
   canvasStore.removeForever(id);
 }
+
+function createTag() {
+  const tag = tagStore.createTag();
+  startRenameTag(tag.id, tag.name, tag.color);
+}
+
+function startRenameTag(id: string, name: string, color: string) {
+  renamingTagId.value = id;
+  tagDraft.value = name;
+  tagColorDraft.value = color;
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>(`[data-tag-rename-id="${id}"]`);
+    input?.focus();
+    input?.select();
+  });
+}
+
+function commitTag(id: string) {
+  const value = tagDraft.value.trim();
+  if (value) tagStore.renameTag(id, value);
+  tagStore.updateTagColor(id, tagColorDraft.value);
+  renamingTagId.value = "";
+  tagDraft.value = "";
+}
+
+function cancelTagRename() {
+  renamingTagId.value = "";
+  tagDraft.value = "";
+}
+
+function deleteTag(id: string, name: string) {
+  if (!window.confirm(`删除标签“${name}”？该标签会从所有便签中移除。`)) return;
+  noteStore.removeTagFromAll(id);
+  tagStore.deleteTag(id);
+}
 </script>
 
 <template>
@@ -147,7 +185,7 @@ function removeForever(id: string, name: string) {
     <section class="section tags">
       <div class="section-title">
         <span>标签</span>
-        <button class="small-add" @click="tagStore.createTag()"><Plus :size="18" /></button>
+        <button class="small-add" @click="createTag"><Plus :size="18" /></button>
       </div>
       <button
         v-for="tag in tagStore.tags"
@@ -155,10 +193,34 @@ function removeForever(id: string, name: string) {
         class="tag-row"
         :class="{ active: tag.id === tagStore.activeTagId }"
         @click="tagStore.toggleTag(tag.id)"
+        @dblclick="startRenameTag(tag.id, tag.name, tag.color)"
+        @contextmenu.prevent="startRenameTag(tag.id, tag.name, tag.color)"
       >
-        <i :style="{ backgroundColor: tag.color }"></i>
-        <span>{{ tag.name }}</span>
+        <input
+          v-if="renamingTagId === tag.id"
+          v-model="tagColorDraft"
+          class="tag-color"
+          type="color"
+          @click.stop
+          @change="tagStore.updateTagColor(tag.id, tagColorDraft)"
+        />
+        <i v-else :style="{ backgroundColor: tag.color }"></i>
+        <input
+          v-if="renamingTagId === tag.id"
+          v-model="tagDraft"
+          :data-tag-rename-id="tag.id"
+          class="tag-name-input"
+          @click.stop
+          @keydown.enter.stop.prevent="commitTag(tag.id)"
+          @keydown.esc.stop.prevent="cancelTagRename"
+          @blur="commitTag(tag.id)"
+        />
+        <span v-else>{{ tag.name }}</span>
         <b>{{ tag.count }}</b>
+        <span class="tag-actions">
+          <button title="重命名" @click.stop="startRenameTag(tag.id, tag.name, tag.color)"><Pencil :size="14" /></button>
+          <button title="删除" @click.stop="deleteTag(tag.id, tag.name)"><Trash2 :size="14" /></button>
+        </span>
       </button>
     </section>
 
@@ -290,16 +352,19 @@ function removeForever(id: string, name: string) {
   gap: 2px;
 }
 
-.canvas-row:hover .row-actions {
+.canvas-row:hover .row-actions,
+.tag-row:hover .tag-actions {
   display: inline-flex;
 }
 
-.canvas-row:hover .time {
+.canvas-row:hover .time,
+.tag-row:hover b {
   display: none;
 }
 
 .row-actions button,
-.trash-row button {
+.trash-row button,
+.tag-actions button {
   width: 26px;
   height: 26px;
   display: inline-flex;
@@ -311,7 +376,8 @@ function removeForever(id: string, name: string) {
 }
 
 .row-actions button:hover,
-.trash-row button:hover {
+.trash-row button:hover,
+.tag-actions button:hover {
   color: #1f2937;
   background: #fff;
 }
@@ -364,6 +430,32 @@ function removeForever(id: string, name: string) {
 
 .tag-row b {
   justify-self: end;
+}
+
+.tag-row {
+  grid-template-columns: 22px 1fr auto;
+}
+
+.tag-actions {
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+
+.tag-color {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.tag-name-input {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #374151;
+  background: transparent;
 }
 
 .settings {

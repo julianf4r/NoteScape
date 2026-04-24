@@ -191,6 +191,7 @@ onUnmounted(() => {
         :editing="noteStore.editingId === note.id"
         :shadow="settingsStore.settings.noteShadow"
         :scale="viewport.scale"
+        :tags="tagStore.tags"
         @select="noteStore.select(note.id, $event.shiftKey)"
         @edit="noteStore.editingId = note.id"
         @update="(patch, track) => updateNote(note, patch, track)"
@@ -200,6 +201,7 @@ onUnmounted(() => {
         @front="noteStore.bringToFront(note.id)"
         @context="(event) => openNoteMenu(event, note.id)"
         @editing-done="noteStore.stopEditing()"
+        @toggle-tag="(tagId) => noteStore.toggleTagForNote(note.id, tagId)"
       />
     </div>
 

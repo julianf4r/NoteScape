@@ -92,6 +92,21 @@ export const useNoteStore = defineStore("note", {
       this.selectedIds = this.selectedIds.filter((id) => this.notes.some((note) => note.id === id));
       if (this.editingId && !this.notes.some((note) => note.id === this.editingId)) this.editingId = "";
     },
+    removeTagFromAll(tagId: string) {
+      this.notes.forEach((note) => {
+        note.tags = note.tags.filter((id) => id !== tagId);
+        note.updatedAt = now();
+      });
+    },
+    toggleTagForNote(noteId: string, tagId: string) {
+      const note = this.notes.find((item) => item.id === noteId);
+      if (!note) return;
+      const before = { ...note, tags: [...note.tags] };
+      const exists = note.tags.includes(tagId);
+      note.tags = exists ? note.tags.filter((id) => id !== tagId) : [...note.tags, tagId];
+      note.updatedAt = now();
+      this.addHistory({ type: "update", before, after: { ...note, tags: [...note.tags] } });
+    },
     duplicateNote(id: string) {
       const note = this.notes.find((item) => item.id === id);
       if (!note) return;

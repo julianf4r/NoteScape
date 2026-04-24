@@ -17,13 +17,15 @@ export const useTagStore = defineStore("tag", {
       this.tags = tags;
     },
     createTag(name = "新标签") {
-      this.tags.push({
+      const tag = {
         id: nanoid(),
         name,
         color: palette[this.tags.length % palette.length],
         count: 0,
         createdAt: new Date().toISOString(),
-      });
+      };
+      this.tags.push(tag);
+      return tag;
     },
     renameTag(id: string, name: string) {
       const tag = this.tags.find((item) => item.id === id);
@@ -32,6 +34,10 @@ export const useTagStore = defineStore("tag", {
     deleteTag(id: string) {
       this.tags = this.tags.filter((item) => item.id !== id);
       if (this.activeTagId === id) this.activeTagId = "";
+    },
+    updateTagColor(id: string, color: string) {
+      const tag = this.tags.find((item) => item.id === id);
+      if (tag) tag.color = color;
     },
     toggleTag(id: string) {
       this.activeTagId = this.activeTagId === id ? "" : id;
