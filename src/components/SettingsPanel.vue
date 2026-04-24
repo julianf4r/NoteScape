@@ -156,14 +156,6 @@ async function restoreDatabase() {
 
       <section>
         <h3>外观</h3>
-        <label>
-          <span>主题</span>
-          <select :value="settings.theme" @change="settingsStore.updateSettings({ theme: ($event.target as HTMLSelectElement).value as any })">
-            <option value="light">浅色</option>
-            <option value="dark">深色</option>
-            <option value="system">跟随系统</option>
-          </select>
-        </label>
         <label class="switch">
           <span>显示网格点</span>
           <input type="checkbox" :checked="settings.showGrid" @change="settingsStore.updateSettings({ showGrid: ($event.target as HTMLInputElement).checked })" />

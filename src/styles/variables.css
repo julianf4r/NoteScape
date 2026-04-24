@@ -18,14 +18,3 @@
   --shadow-md: 0 8px 18px rgba(0, 0, 0, 0.12);
   --shadow-lg: 0 14px 28px rgba(0, 0, 0, 0.16);
 }
-
-:root[data-theme="dark"] {
-  --app-bg: #111827;
-  --sidebar-bg: #171923;
-  --canvas-bg: #202026;
-  --border-color: #303441;
-  --text-primary: #f3f4f6;
-  --text-secondary: #cbd5e1;
-  --text-muted: #94a3b8;
-  --primary-soft: #1e3a5f;
-}

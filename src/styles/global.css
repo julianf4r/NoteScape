@@ -22,26 +22,6 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-:root[data-theme="dark"] .sidebar,
-:root[data-theme="dark"] .panel,
-:root[data-theme="dark"] .search-results,
-:root[data-theme="dark"] .menu-popover,
-:root[data-theme="dark"] .note-actions,
-:root[data-theme="dark"] .tag-panel,
-:root[data-theme="dark"] .toolbar,
-:root[data-theme="dark"] .minimap {
-  color: var(--text-primary);
-  background: #171923;
-  border-color: #303441;
-}
-
-:root[data-theme="dark"] input,
-:root[data-theme="dark"] textarea,
-:root[data-theme="dark"] select {
-  color: var(--text-primary);
-  background: #111827;
-  border-color: #303441;
-}
 
 button,
 input,
