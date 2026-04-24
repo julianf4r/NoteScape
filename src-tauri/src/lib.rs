@@ -1,5 +1,5 @@
-use rusqlite::{params, Connection};
-use serde::Serialize;
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
@@ -10,6 +10,80 @@ const PREF_FILE: &str = "database-path.txt";
 struct DatabaseLoadResult {
     data: String,
     db_path: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppData {
+    version: i64,
+    canvases: Vec<CanvasItem>,
+    notes: Vec<StickyNote>,
+    tags: Vec<TagItem>,
+    settings: AppSettings,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CanvasItem {
+    id: String,
+    name: String,
+    description: Option<String>,
+    created_at: String,
+    updated_at: String,
+    deleted_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StickyNote {
+    id: String,
+    canvas_id: String,
+    title: Option<String>,
+    content: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+    color: String,
+    rotation: f64,
+    z_index: i64,
+    tags: Vec<String>,
+    font_size: f64,
+    font_weight: String,
+    text_align: String,
+    checked_items: Option<Vec<ChecklistItem>>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ChecklistItem {
+    id: String,
+    text: String,
+    checked: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TagItem {
+    id: String,
+    name: String,
+    color: String,
+    count: i64,
+    created_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AppSettings {
+    theme: String,
+    default_note_color: String,
+    default_font_size: f64,
+    show_grid: bool,
+    random_rotation: bool,
+    note_shadow: bool,
+    auto_save: bool,
 }
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -52,35 +126,429 @@ fn open_database(path: &Path) -> Result<Connection, String> {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     let conn = Connection::open(path).map_err(|error| error.to_string())?;
-    conn.execute_batch(
-        "CREATE TABLE IF NOT EXISTS app_state (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            data TEXT NOT NULL,
-            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );",
-    )
-    .map_err(|error| error.to_string())?;
+    conn.pragma_update(None, "foreign_keys", "ON")
+        .map_err(|error| error.to_string())?;
+    init_schema(&conn)?;
     Ok(conn)
 }
 
-fn load_or_seed(path: &Path, fallback_data: &str) -> Result<String, String> {
-    let conn = open_database(path)?;
-    let mut statement = conn
-        .prepare("SELECT data FROM app_state WHERE id = 1")
+fn init_schema(conn: &Connection) -> Result<(), String> {
+    conn.execute_batch(
+        "
+        CREATE TABLE IF NOT EXISTS app_meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS canvases (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            deleted_at TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS tags (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            color TEXT NOT NULL,
+            count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS notes (
+            id TEXT PRIMARY KEY,
+            canvas_id TEXT NOT NULL,
+            title TEXT,
+            content TEXT NOT NULL,
+            x REAL NOT NULL,
+            y REAL NOT NULL,
+            width REAL NOT NULL,
+            height REAL NOT NULL,
+            color TEXT NOT NULL,
+            rotation REAL NOT NULL,
+            z_index INTEGER NOT NULL,
+            font_size REAL NOT NULL,
+            font_weight TEXT NOT NULL,
+            text_align TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS note_tags (
+            note_id TEXT NOT NULL,
+            tag_id TEXT NOT NULL,
+            PRIMARY KEY(note_id, tag_id),
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE,
+            FOREIGN KEY(tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS checklist_items (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            text TEXT NOT NULL,
+            checked INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL,
+            FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_notes_canvas_id ON notes(canvas_id);
+        CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id);
+        ",
+    )
+    .map_err(|error| error.to_string())
+}
+
+fn parse_app_data(data: &str) -> Result<AppData, String> {
+    serde_json::from_str(data).map_err(|error| error.to_string())
+}
+
+fn is_database_empty(conn: &Connection) -> Result<bool, String> {
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM canvases", [], |row| row.get(0))
         .map_err(|error| error.to_string())?;
-    let existing = statement.query_row([], |row| row.get::<_, String>(0)).ok();
-    drop(statement);
+    Ok(count == 0)
+}
 
-    if let Some(data) = existing {
-        return Ok(data);
-    }
+fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(), String> {
+    let tx = conn.transaction().map_err(|error| error.to_string())?;
 
-    conn.execute(
-        "INSERT INTO app_state (id, data, updated_at) VALUES (1, ?1, CURRENT_TIMESTAMP)",
-        params![fallback_data],
+    tx.execute("DELETE FROM checklist_items", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM note_tags", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM notes", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM tags", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM canvases", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM app_meta", [])
+        .map_err(|error| error.to_string())?;
+
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('version', ?1)",
+        params![app_data.version.to_string()],
     )
     .map_err(|error| error.to_string())?;
-    Ok(fallback_data.to_string())
+
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('theme', ?1)",
+        params![app_data.settings.theme],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('default_note_color', ?1)",
+        params![app_data.settings.default_note_color],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('default_font_size', ?1)",
+        params![app_data.settings.default_font_size.to_string()],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('show_grid', ?1)",
+        params![bool_to_text(app_data.settings.show_grid)],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('random_rotation', ?1)",
+        params![bool_to_text(app_data.settings.random_rotation)],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('note_shadow', ?1)",
+        params![bool_to_text(app_data.settings.note_shadow)],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('auto_save', ?1)",
+        params![bool_to_text(app_data.settings.auto_save)],
+    )
+    .map_err(|error| error.to_string())?;
+
+    for canvas in &app_data.canvases {
+        tx.execute(
+            "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                canvas.id,
+                canvas.name,
+                canvas.description,
+                canvas.created_at,
+                canvas.updated_at,
+                canvas.deleted_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
+    for tag in &app_data.tags {
+        tx.execute(
+            "INSERT INTO tags (id, name, color, count, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![tag.id, tag.name, tag.color, tag.count, tag.created_at],
+        )
+        .map_err(|error| error.to_string())?;
+    }
+
+    for note in &app_data.notes {
+        tx.execute(
+            "INSERT INTO notes (
+                id, canvas_id, title, content, x, y, width, height, color, rotation, z_index,
+                font_size, font_weight, text_align, created_at, updated_at
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            params![
+                note.id,
+                note.canvas_id,
+                note.title,
+                note.content,
+                note.x,
+                note.y,
+                note.width,
+                note.height,
+                note.color,
+                note.rotation,
+                note.z_index,
+                note.font_size,
+                note.font_weight,
+                note.text_align,
+                note.created_at,
+                note.updated_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+
+        for tag_id in &note.tags {
+            tx.execute(
+                "INSERT OR IGNORE INTO note_tags (note_id, tag_id) VALUES (?1, ?2)",
+                params![note.id, tag_id],
+            )
+            .map_err(|error| error.to_string())?;
+        }
+
+        if let Some(items) = &note.checked_items {
+            for (index, item) in items.iter().enumerate() {
+                tx.execute(
+                    "INSERT INTO checklist_items (id, note_id, text, checked, sort_order)
+                     VALUES (?1, ?2, ?3, ?4, ?5)",
+                    params![item.id, note.id, item.text, item.checked as i64, index as i64],
+                )
+                .map_err(|error| error.to_string())?;
+            }
+        }
+    }
+
+    tx.commit().map_err(|error| error.to_string())
+}
+
+fn load_structured_data(conn: &Connection) -> Result<AppData, String> {
+    let version = meta_value(conn, "version")?
+        .and_then(|value| value.parse::<i64>().ok())
+        .unwrap_or(1);
+
+    let settings = AppSettings {
+        theme: meta_value(conn, "theme")?.unwrap_or_else(|| "light".to_string()),
+        default_note_color: meta_value(conn, "default_note_color")?
+            .unwrap_or_else(|| "yellow".to_string()),
+        default_font_size: meta_value(conn, "default_font_size")?
+            .and_then(|value| value.parse::<f64>().ok())
+            .unwrap_or(18.0),
+        show_grid: meta_bool(conn, "show_grid", true)?,
+        random_rotation: meta_bool(conn, "random_rotation", true)?,
+        note_shadow: meta_bool(conn, "note_shadow", true)?,
+        auto_save: meta_bool(conn, "auto_save", true)?,
+    };
+
+    let canvases = load_canvases(conn)?;
+    let tags = load_tags(conn)?;
+    let mut notes = load_notes(conn)?;
+
+    for note in &mut notes {
+        note.tags = load_note_tags(conn, &note.id)?;
+        note.checked_items = load_checklist_items(conn, &note.id)?;
+    }
+
+    Ok(AppData {
+        version,
+        canvases,
+        notes,
+        tags,
+        settings,
+    })
+}
+
+fn load_or_seed(path: &Path, fallback_data: &str) -> Result<String, String> {
+    let mut conn = open_database(path)?;
+    if is_database_empty(&conn)? {
+        let seed_data = legacy_app_state_data(&conn)?.unwrap_or_else(|| fallback_data.to_string());
+        let seed = parse_app_data(&seed_data)?;
+        save_structured_data(&mut conn, &seed)?;
+    }
+    serde_json::to_string(&load_structured_data(&conn)?).map_err(|error| error.to_string())
+}
+
+fn legacy_app_state_data(conn: &Connection) -> Result<Option<String>, String> {
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_state'",
+            [],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+
+    if exists.is_none() {
+        return Ok(None);
+    }
+
+    conn.query_row("SELECT data FROM app_state WHERE id = 1", [], |row| row.get(0))
+        .optional()
+        .map_err(|error| error.to_string())
+}
+
+fn meta_value(conn: &Connection, key: &str) -> Result<Option<String>, String> {
+    conn.query_row(
+        "SELECT value FROM app_meta WHERE key = ?1",
+        params![key],
+        |row| row.get(0),
+    )
+    .optional()
+    .map_err(|error| error.to_string())
+}
+
+fn meta_bool(conn: &Connection, key: &str, fallback: bool) -> Result<bool, String> {
+    Ok(meta_value(conn, key)?
+        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
+        .unwrap_or(fallback))
+}
+
+fn bool_to_text(value: bool) -> &'static str {
+    if value {
+        "1"
+    } else {
+        "0"
+    }
+}
+
+fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
+    let mut statement = conn
+        .prepare(
+            "SELECT id, name, description, created_at, updated_at, deleted_at
+             FROM canvases
+             ORDER BY created_at ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(CanvasItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                created_at: row.get(3)?,
+                updated_at: row.get(4)?,
+                deleted_at: row.get(5)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
+    let mut statement = conn
+        .prepare("SELECT id, name, color, count, created_at FROM tags ORDER BY created_at ASC")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(TagItem {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                color: row.get(2)?,
+                count: row.get(3)?,
+                created_at: row.get(4)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
+    let mut statement = conn
+        .prepare(
+            "SELECT id, canvas_id, title, content, x, y, width, height, color, rotation, z_index,
+                    font_size, font_weight, text_align, created_at, updated_at
+             FROM notes
+             ORDER BY z_index ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(StickyNote {
+                id: row.get(0)?,
+                canvas_id: row.get(1)?,
+                title: row.get(2)?,
+                content: row.get(3)?,
+                x: row.get(4)?,
+                y: row.get(5)?,
+                width: row.get(6)?,
+                height: row.get(7)?,
+                color: row.get(8)?,
+                rotation: row.get(9)?,
+                z_index: row.get(10)?,
+                tags: Vec::new(),
+                font_size: row.get(11)?,
+                font_weight: row.get(12)?,
+                text_align: row.get(13)?,
+                checked_items: None,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_note_tags(conn: &Connection, note_id: &str) -> Result<Vec<String>, String> {
+    let mut statement = conn
+        .prepare("SELECT tag_id FROM note_tags WHERE note_id = ?1 ORDER BY tag_id ASC")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![note_id], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_checklist_items(
+    conn: &Connection,
+    note_id: &str,
+) -> Result<Option<Vec<ChecklistItem>>, String> {
+    let mut statement = conn
+        .prepare(
+            "SELECT id, text, checked FROM checklist_items
+             WHERE note_id = ?1
+             ORDER BY sort_order ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![note_id], |row| {
+            let checked: i64 = row.get(2)?;
+            Ok(ChecklistItem {
+                id: row.get(0)?,
+                text: row.get(1)?,
+                checked: checked != 0,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    let items = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    Ok((!items.is_empty()).then_some(items))
 }
 
 #[tauri::command]
@@ -99,14 +567,9 @@ fn load_app_data(app: AppHandle, default_data: String) -> Result<DatabaseLoadRes
 #[tauri::command]
 fn save_app_data(app: AppHandle, data: String) -> Result<(), String> {
     let db_path = read_database_path(&app)?;
-    let conn = open_database(&db_path)?;
-    conn.execute(
-        "INSERT INTO app_state (id, data, updated_at) VALUES (1, ?1, CURRENT_TIMESTAMP)
-         ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP",
-        params![data],
-    )
-    .map_err(|error| error.to_string())?;
-    Ok(())
+    let mut conn = open_database(&db_path)?;
+    let app_data = parse_app_data(&data)?;
+    save_structured_data(&mut conn, &app_data)
 }
 
 #[tauri::command]
