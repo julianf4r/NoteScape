@@ -273,20 +273,22 @@
 
 ## P12：便签内容能力
 
-- [ ] checklist UI
-  - [ ] 创建 checklist 项
-  - [ ] 勾选/取消
-  - [ ] 删除 checklist 项
+- [~] checklist UI
+  - [x] 创建 checklist 项
+  - [x] 勾选/取消
+  - [~] 删除 checklist 项
   - [ ] checklist 项排序
-  - [ ] 保存到 `checklist_items`
-- [ ] 便签标题
+  - [x] 保存到富文本 `contentJson`
+- [~] 便签标题
   - [ ] 支持 `title` 字段编辑
   - [ ] 标题和正文分离
-  - [ ] 搜索标题
-- [ ] 内容扩展
-  - [ ] 链接识别
+  - [x] 搜索标题
+- [~] 内容扩展
+  - [x] 链接识别
   - [ ] 可选：图片附件
-  - [ ] 可选：基础富文本
+  - [x] 可选：基础富文本
+  - [x] 接入 Tiptap Vue 3 编辑器
+  - [x] SQLite 保存 Tiptap JSON 文档
 
 ## P13：桌面应用完整度
 

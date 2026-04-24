@@ -49,6 +49,7 @@ struct StickyNote {
     canvas_id: String,
     title: Option<String>,
     content: String,
+    content_json: Option<serde_json::Value>,
     x: f64,
     y: f64,
     width: f64,
@@ -174,6 +175,7 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             canvas_id TEXT NOT NULL,
             title TEXT,
             content TEXT NOT NULL,
+            content_json TEXT,
             x REAL NOT NULL,
             y REAL NOT NULL,
             width REAL NOT NULL,
@@ -214,6 +216,7 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
     add_column_if_missing(conn, "canvases", "viewport_offset_x", "REAL")?;
     add_column_if_missing(conn, "canvases", "viewport_offset_y", "REAL")?;
     add_column_if_missing(conn, "canvases", "viewport_scale", "REAL")?;
+    add_column_if_missing(conn, "notes", "content_json", "TEXT")?;
     Ok(())
 }
 
@@ -332,14 +335,15 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
     for note in &app_data.notes {
         tx.execute(
             "INSERT INTO notes (
-                id, canvas_id, title, content, x, y, width, height, color, rotation, z_index,
+                id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
                 font_size, font_weight, text_align, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             params![
                 note.id,
                 note.canvas_id,
                 note.title,
                 note.content,
+                note.content_json.as_ref().map(|value| value.to_string()),
                 note.x,
                 note.y,
                 note.width,
@@ -425,13 +429,14 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
     let tx = conn.transaction().map_err(|error| error.to_string())?;
     tx.execute(
         "INSERT INTO notes (
-            id, canvas_id, title, content, x, y, width, height, color, rotation, z_index,
+            id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
             font_size, font_weight, text_align, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
         ON CONFLICT(id) DO UPDATE SET
             canvas_id = excluded.canvas_id,
             title = excluded.title,
             content = excluded.content,
+            content_json = excluded.content_json,
             x = excluded.x,
             y = excluded.y,
             width = excluded.width,
@@ -448,6 +453,7 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
             note.canvas_id,
             note.title,
             note.content,
+            note.content_json.as_ref().map(|value| value.to_string()),
             note.x,
             note.y,
             note.width,
@@ -653,7 +659,7 @@ fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
 fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
     let mut statement = conn
         .prepare(
-            "SELECT id, canvas_id, title, content, x, y, width, height, color, rotation, z_index,
+            "SELECT id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
                     font_size, font_weight, text_align, created_at, updated_at
              FROM notes
              ORDER BY z_index ASC",
@@ -666,20 +672,23 @@ fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
                 canvas_id: row.get(1)?,
                 title: row.get(2)?,
                 content: row.get(3)?,
-                x: row.get(4)?,
-                y: row.get(5)?,
-                width: row.get(6)?,
-                height: row.get(7)?,
-                color: row.get(8)?,
-                rotation: row.get(9)?,
-                z_index: row.get(10)?,
+                content_json: row
+                    .get::<_, Option<String>>(4)?
+                    .and_then(|value| serde_json::from_str(&value).ok()),
+                x: row.get(5)?,
+                y: row.get(6)?,
+                width: row.get(7)?,
+                height: row.get(8)?,
+                color: row.get(9)?,
+                rotation: row.get(10)?,
+                z_index: row.get(11)?,
                 tags: Vec::new(),
-                font_size: row.get(11)?,
-                font_weight: row.get(12)?,
-                text_align: row.get(13)?,
+                font_size: row.get(12)?,
+                font_weight: row.get(13)?,
+                text_align: row.get(14)?,
                 checked_items: None,
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
+                created_at: row.get(15)?,
+                updated_at: row.get(16)?,
             })
         })
         .map_err(|error| error.to_string())?;

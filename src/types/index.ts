@@ -19,6 +19,7 @@ export interface StickyNote {
   canvasId: string;
   title?: string;
   content: string;
+  contentJson?: unknown;
   x: number;
   y: number;
   width: number;

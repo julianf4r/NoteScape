@@ -1,6 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Palette, Pin, Plus, Tags, Trash2 } from "lucide-vue-next";
+import { EditorContent, type JSONContent, useEditor } from "@tiptap/vue-3";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import TextAlign from "@tiptap/extension-text-align";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import Link from "@tiptap/extension-link";
 import type { NoteColor, StickyNote, TagItem } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 
@@ -28,11 +35,44 @@ const emit = defineEmits<{
   toggleTag: [tagId: string];
 }>();
 
-const textarea = ref<HTMLTextAreaElement>();
 const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
+
+function textToDoc(text: string): JSONContent {
+  return {
+    type: "doc",
+    content: (text ? text.split("\n") : [""]).map((line) => ({
+      type: "paragraph",
+      content: line ? [{ type: "text", text: line }] : undefined,
+    })),
+  };
+}
+
+const editor = useEditor({
+  content: (props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content),
+  editable: props.editing,
+  extensions: [
+    StarterKit,
+    Placeholder.configure({ placeholder: "输入内容..." }),
+    TextAlign.configure({ types: ["heading", "paragraph"] }),
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
+  ],
+  editorProps: {
+    handleDOMEvents: {
+      blur: () => {
+        if (props.editing) saveEdit();
+        return false;
+      },
+    },
+  },
+  onUpdate: ({ editor }) => {
+    draft.value = editor.getText();
+  },
+});
 
 const highlightedContent = computed(() => {
   const query = props.searchQuery.trim();
@@ -68,11 +108,19 @@ const style = computed(() => ({
 watch(
   () => props.editing,
   async (editing) => {
+    editor.value?.setEditable(editing);
     if (editing) {
       draft.value = props.note.content;
       await nextTick();
-      textarea.value?.focus();
+      editor.value?.commands.focus("end");
     }
+  },
+);
+
+watch(
+  () => [props.note.id, props.note.contentJson, props.note.content],
+  () => {
+    if (!props.editing) editor.value?.commands.setContent((props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content));
   },
 );
 
@@ -124,7 +172,8 @@ function endResize() {
 }
 
 function saveEdit() {
-  emit("update", { content: draft.value }, true);
+  const richEditor = editor.value;
+  emit("update", { content: richEditor?.getText() ?? draft.value, contentJson: richEditor?.getJSON() }, true);
   emit("editingDone");
 }
 
@@ -154,20 +203,13 @@ function setFontSize(event: Event) {
     <div v-if="props.note.id === 'note-feedback'" class="pin"><Pin :size="22" /></div>
     <div v-if="['note-todo', 'note-timeline', 'note-coffee'].includes(props.note.id)" class="tape"></div>
 
-    <textarea
-      v-if="props.editing"
-      ref="textarea"
-      v-model="draft"
-      placeholder="输入内容..."
-      @mousedown.stop
-      @keydown.esc.prevent.stop="saveEdit"
-      @blur="saveEdit"
-    ></textarea>
+    <EditorContent v-if="props.editing" class="editor-content" :editor="editor" @mousedown.stop @keydown.esc.capture.prevent.stop="saveEdit" />
     <div v-else class="content">
-      <template v-for="(part, index) in highlightedContent" :key="index">
+      <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
         <mark v-if="part.match">{{ part.text }}</mark>
         <template v-else>{{ part.text }}</template>
       </template>
+      <EditorContent v-else class="editor-content readonly" :editor="editor" />
     </div>
 
     <div v-if="props.selected && !props.editing" class="note-actions">
@@ -260,18 +302,52 @@ mark {
   }
 }
 
-textarea {
+.editor-content {
   width: 100%;
   height: 100%;
-  padding: 0;
-  resize: none;
-  border: 0;
-  outline: 0;
   color: inherit;
-  background: transparent;
-  line-height: 1.55;
   font-family: "Segoe Print", "Comic Sans MS", "Microsoft YaHei", cursive;
   font-size: inherit;
+}
+
+.editor-content :deep(.tiptap) {
+  min-height: 100%;
+  outline: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.editor-content :deep(p) {
+  margin: 0 0 0.35em;
+}
+
+.editor-content :deep(ul),
+.editor-content :deep(ol) {
+  margin: 0.2em 0;
+  padding-left: 1.25em;
+}
+
+.editor-content :deep(ul[data-type="taskList"]) {
+  list-style: none;
+  padding-left: 0;
+}
+
+.editor-content :deep(li[data-type="taskItem"]) {
+  display: flex;
+  gap: 0.45em;
+}
+
+.editor-content :deep(a) {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.editor-content :deep(.is-editor-empty:first-child::before) {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: rgba(31, 41, 55, 0.48);
+  pointer-events: none;
 }
 
 .color-grid-pink,
