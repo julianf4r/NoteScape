@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { Maximize2, Minus, Plus } from "lucide-vue-next";
 import type { StickyNote, ViewportState } from "../types";
 import { noteColors } from "../utils/colors";
@@ -6,6 +7,8 @@ import { noteColors } from "../utils/colors";
 const props = defineProps<{
   notes: StickyNote[];
   viewport: ViewportState;
+  boardWidth: number;
+  boardHeight: number;
 }>();
 
 const emit = defineEmits<{
@@ -15,10 +18,52 @@ const emit = defineEmits<{
   jump: [x: number, y: number];
 }>();
 
+const mapWidth = 154;
+const mapHeight = 122;
+const padding = 60;
+
+const bounds = computed(() => {
+  if (!props.notes.length) return { minX: -400, minY: -300, maxX: 800, maxY: 600, width: 1200, height: 900 };
+  const minX = Math.min(...props.notes.map((note) => note.x)) - padding;
+  const minY = Math.min(...props.notes.map((note) => note.y)) - padding;
+  const maxX = Math.max(...props.notes.map((note) => note.x + note.width)) + padding;
+  const maxY = Math.max(...props.notes.map((note) => note.y + note.height)) + padding;
+  return { minX, minY, maxX, maxY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
+});
+
+const mapScale = computed(() => Math.min(mapWidth / bounds.value.width, mapHeight / bounds.value.height));
+const offset = computed(() => ({
+  x: (mapWidth - bounds.value.width * mapScale.value) / 2,
+  y: (mapHeight - bounds.value.height * mapScale.value) / 2,
+}));
+
+function noteStyle(note: StickyNote) {
+  return {
+    left: `${offset.value.x + (note.x - bounds.value.minX) * mapScale.value}px`,
+    top: `${offset.value.y + (note.y - bounds.value.minY) * mapScale.value}px`,
+    width: `${Math.max(4, note.width * mapScale.value)}px`,
+    height: `${Math.max(4, note.height * mapScale.value)}px`,
+    backgroundColor: noteColors[note.color],
+  };
+}
+
+const viewportStyle = computed(() => {
+  const worldLeft = -props.viewport.offsetX / props.viewport.scale;
+  const worldTop = -props.viewport.offsetY / props.viewport.scale;
+  const worldWidth = props.boardWidth / props.viewport.scale;
+  const worldHeight = props.boardHeight / props.viewport.scale;
+  return {
+    left: `${offset.value.x + (worldLeft - bounds.value.minX) * mapScale.value}px`,
+    top: `${offset.value.y + (worldTop - bounds.value.minY) * mapScale.value}px`,
+    width: `${Math.max(8, worldWidth * mapScale.value)}px`,
+    height: `${Math.max(8, worldHeight * mapScale.value)}px`,
+  };
+});
+
 function clickMap(event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  const x = ((event.clientX - rect.left) / rect.width) * 1200;
-  const y = ((event.clientY - rect.top) / rect.height) * 900;
+  const x = bounds.value.minX + ((event.clientX - rect.left - offset.value.x) / mapScale.value);
+  const y = bounds.value.minY + ((event.clientY - rect.top - offset.value.y) / mapScale.value);
   emit("jump", x, y);
 }
 </script>
@@ -26,25 +71,8 @@ function clickMap(event: MouseEvent) {
 <template>
   <div class="minimap">
     <div class="map" @click="clickMap">
-      <div
-        v-for="note in props.notes"
-        :key="note.id"
-        class="mini-note"
-        :style="{
-          left: `${note.x / 10}px`,
-          top: `${note.y / 10}px`,
-          width: `${Math.max(10, note.width / 10)}px`,
-          height: `${Math.max(8, note.height / 10)}px`,
-          backgroundColor: noteColors[note.color],
-        }"
-      ></div>
-      <div
-        class="viewport"
-        :style="{
-          left: `${Math.max(0, -props.viewport.offsetX / props.viewport.scale / 10)}px`,
-          top: `${Math.max(0, -props.viewport.offsetY / props.viewport.scale / 10)}px`,
-        }"
-      ></div>
+      <div v-for="note in props.notes" :key="note.id" class="mini-note" :style="noteStyle(note)"></div>
+      <div class="viewport" :style="viewportStyle"></div>
     </div>
     <div class="mini-controls">
       <button @click="emit('zoomOut')"><Minus :size="16" /></button>
@@ -86,8 +114,6 @@ function clickMap(event: MouseEvent) {
 
 .viewport {
   position: absolute;
-  width: 72px;
-  height: 42px;
   border: 2px solid #3b82f6;
   background: rgba(59, 130, 246, 0.06);
 }

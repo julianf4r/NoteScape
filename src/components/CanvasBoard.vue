@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref } from "vue";
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import CanvasToolbar from "./CanvasToolbar.vue";
 import MiniMap from "./MiniMap.vue";
 import StickyNote from "./StickyNote.vue";
@@ -18,6 +18,7 @@ const settingsStore = useSettingsStore();
 
 const board = ref<HTMLElement>();
 const viewport = reactive<ViewportState>({ offsetX: 0, offsetY: 0, scale: 1 });
+const boardSize = reactive({ width: 0, height: 0 });
 const handActive = ref(false);
 const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
@@ -71,18 +72,33 @@ function zoomBy(delta: number, originX?: number, originY?: number) {
   viewport.scale = newScale;
   viewport.offsetX = cx - rect.left - world.x * newScale;
   viewport.offsetY = cy - rect.top - world.y * newScale;
+  saveViewport();
 }
 
 function resetZoom() {
   viewport.scale = 1;
   viewport.offsetX = 0;
   viewport.offsetY = 0;
+  saveViewport();
 }
 
 function fitView() {
-  viewport.scale = 0.82;
-  viewport.offsetX = 60;
-  viewport.offsetY = 20;
+  const rect = board.value?.getBoundingClientRect();
+  if (!rect || !visibleNotes.value.length) {
+    resetZoom();
+    return;
+  }
+  const padding = 140;
+  const minX = Math.min(...visibleNotes.value.map((note) => note.x));
+  const minY = Math.min(...visibleNotes.value.map((note) => note.y));
+  const maxX = Math.max(...visibleNotes.value.map((note) => note.x + note.width));
+  const maxY = Math.max(...visibleNotes.value.map((note) => note.y + note.height));
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  viewport.scale = clamp(Math.min((rect.width - padding) / width, (rect.height - padding) / height), 0.25, 3);
+  viewport.offsetX = rect.width / 2 - (minX + width / 2) * viewport.scale;
+  viewport.offsetY = rect.height / 2 - (minY + height / 2) * viewport.scale;
+  saveViewport();
 }
 
 function onWheel(event: WheelEvent) {
@@ -110,6 +126,7 @@ function pan(event: MouseEvent) {
 function stopPan() {
   window.removeEventListener("mousemove", pan);
   panStart.value = undefined;
+  saveViewport();
 }
 
 function onBoardMouseDown(event: MouseEvent) {
@@ -267,6 +284,7 @@ function jumpMiniMap(x: number, y: number) {
   if (!rect) return;
   viewport.offsetX = rect.width / 2 - x * viewport.scale;
   viewport.offsetY = rect.height / 2 - y * viewport.scale;
+  saveViewport();
 }
 
 function centerNote(noteId: string) {
@@ -320,17 +338,43 @@ function onKeyup(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  updateBoardSize();
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onKeyup);
   window.addEventListener("locate-note", onLocateNote);
+  window.addEventListener("resize", updateBoardSize);
 });
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
   window.removeEventListener("locate-note", onLocateNote);
+  window.removeEventListener("resize", updateBoardSize);
   window.clearTimeout(highlightTimer);
 });
+
+function updateBoardSize() {
+  const rect = board.value?.getBoundingClientRect();
+  if (!rect) return;
+  boardSize.width = rect.width;
+  boardSize.height = rect.height;
+}
+
+function saveViewport() {
+  if (!canvasStore.currentCanvasId) return;
+  canvasStore.updateViewport(canvasStore.currentCanvasId, { ...viewport });
+}
+
+watch(
+  () => canvasStore.currentCanvasId,
+  () => {
+    const saved = canvasStore.currentCanvas?.viewport;
+    viewport.offsetX = saved?.offsetX ?? 0;
+    viewport.offsetY = saved?.offsetY ?? 0;
+    viewport.scale = saved?.scale ?? 1;
+    requestAnimationFrame(updateBoardSize);
+  },
+);
 </script>
 
 <template>
@@ -386,7 +430,16 @@ onUnmounted(() => {
       @settings="settingsStore.togglePanel()"
     />
 
-    <MiniMap :notes="visibleNotes" :viewport="viewport" @zoom-in="zoomBy(0.1)" @zoom-out="zoomBy(-0.1)" @fit="fitView" @jump="jumpMiniMap" />
+    <MiniMap
+      :notes="visibleNotes"
+      :viewport="viewport"
+      :board-width="boardSize.width"
+      :board-height="boardSize.height"
+      @zoom-in="zoomBy(0.1)"
+      @zoom-out="zoomBy(-0.1)"
+      @fit="fitView"
+      @jump="jumpMiniMap"
+    />
 
     <div
       v-if="contextMenu"

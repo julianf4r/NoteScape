@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
 import type { CanvasItem } from "../types";
+import type { ViewportState } from "../types";
 import { deleteCanvasData, removeCanvasForeverData, restoreCanvasData, saveCanvasData } from "../utils/storage";
 
 const now = () => new Date().toISOString();
@@ -67,6 +68,13 @@ export const useCanvasStore = defineStore("canvas", {
     removeForever(id: string) {
       this.canvases = this.canvases.filter((item) => item.id !== id);
       void removeCanvasForeverData(id);
+    },
+    updateViewport(id: string, viewport: ViewportState) {
+      const canvas = this.canvases.find((item) => item.id === id);
+      if (!canvas) return;
+      canvas.viewport = { ...viewport };
+      canvas.updatedAt = now();
+      void saveCanvasData(canvas);
     },
   },
 });

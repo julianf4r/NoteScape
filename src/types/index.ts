@@ -42,6 +42,7 @@ export interface CanvasItem {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string | null;
+  viewport?: ViewportState;
 }
 
 export interface TagItem {

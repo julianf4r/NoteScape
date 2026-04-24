@@ -31,6 +31,15 @@ struct CanvasItem {
     created_at: String,
     updated_at: String,
     deleted_at: Option<String>,
+    viewport: Option<ViewportState>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ViewportState {
+    offset_x: f64,
+    offset_y: f64,
+    scale: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -146,7 +155,10 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             description TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
-            deleted_at TEXT
+            deleted_at TEXT,
+            viewport_offset_x REAL,
+            viewport_offset_y REAL,
+            viewport_scale REAL
         );
 
         CREATE TABLE IF NOT EXISTS tags (
@@ -198,7 +210,27 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
         CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id);
         ",
     )
-    .map_err(|error| error.to_string())
+    .map_err(|error| error.to_string())?;
+    add_column_if_missing(conn, "canvases", "viewport_offset_x", "REAL")?;
+    add_column_if_missing(conn, "canvases", "viewport_offset_y", "REAL")?;
+    add_column_if_missing(conn, "canvases", "viewport_scale", "REAL")?;
+    Ok(())
+}
+
+fn add_column_if_missing(conn: &Connection, table: &str, column: &str, definition: &str) -> Result<(), String> {
+    let mut statement = conn
+        .prepare(&format!("PRAGMA table_info({table})"))
+        .map_err(|error| error.to_string())?;
+    let columns = statement
+        .query_map([], |row| row.get::<_, String>(1))
+        .map_err(|error| error.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())?;
+    if !columns.iter().any(|name| name == column) {
+        conn.execute(&format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"), [])
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 fn parse_app_data(data: &str) -> Result<AppData, String> {
@@ -272,15 +304,18 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
 
     for canvas in &app_data.canvases {
         tx.execute(
-            "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 canvas.id,
                 canvas.name,
                 canvas.description,
                 canvas.created_at,
                 canvas.updated_at,
-                canvas.deleted_at
+                canvas.deleted_at,
+                canvas.viewport.as_ref().map(|viewport| viewport.offset_x),
+                canvas.viewport.as_ref().map(|viewport| viewport.offset_y),
+                canvas.viewport.as_ref().map(|viewport| viewport.scale)
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -346,20 +381,26 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
 
 fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+        "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             description = excluded.description,
             updated_at = excluded.updated_at,
-            deleted_at = excluded.deleted_at",
+            deleted_at = excluded.deleted_at,
+            viewport_offset_x = excluded.viewport_offset_x,
+            viewport_offset_y = excluded.viewport_offset_y,
+            viewport_scale = excluded.viewport_scale",
         params![
             canvas.id,
             canvas.name,
             canvas.description,
             canvas.created_at,
             canvas.updated_at,
-            canvas.deleted_at
+            canvas.deleted_at,
+            canvas.viewport.as_ref().map(|viewport| viewport.offset_x),
+            canvas.viewport.as_ref().map(|viewport| viewport.offset_y),
+            canvas.viewport.as_ref().map(|viewport| viewport.scale)
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -565,7 +606,7 @@ fn bool_to_text(value: bool) -> &'static str {
 fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
     let mut statement = conn
         .prepare(
-            "SELECT id, name, description, created_at, updated_at, deleted_at
+            "SELECT id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale
              FROM canvases
              ORDER BY created_at ASC",
         )
@@ -579,6 +620,10 @@ fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
                 created_at: row.get(3)?,
                 updated_at: row.get(4)?,
                 deleted_at: row.get(5)?,
+                viewport: match (row.get::<_, Option<f64>>(6)?, row.get::<_, Option<f64>>(7)?, row.get::<_, Option<f64>>(8)?) {
+                    (Some(offset_x), Some(offset_y), Some(scale)) => Some(ViewportState { offset_x, offset_y, scale }),
+                    _ => None,
+                },
             })
         })
         .map_err(|error| error.to_string())?;
