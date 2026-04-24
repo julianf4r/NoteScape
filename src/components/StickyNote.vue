@@ -41,6 +41,7 @@ const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
 const decoration = computed(() => props.note.decoration ?? "none");
+const frontTitle = computed(() => (props.note.pinned ? "取消置顶" : "置顶"));
 
 function textToDoc(text: string): JSONContent {
   return {
@@ -99,7 +100,7 @@ const style = computed(() => ({
   top: `${props.note.y}px`,
   width: `${props.note.width}px`,
   height: `${props.note.height}px`,
-  zIndex: props.selected ? props.note.zIndex + 1000 : props.note.zIndex,
+  zIndex: (props.note.pinned ? 100000 : 0) + props.note.zIndex,
   backgroundColor: noteColors[props.note.color],
   transform: `rotate(${props.note.rotation}deg)`,
   fontSize: `${props.note.fontSize}px`,
@@ -229,7 +230,7 @@ function setFontSize(event: Event) {
       <button title="加粗" @click="emit('update', { fontWeight: props.note.fontWeight === 'bold' ? 'normal' : 'bold' }, true)"><Bold :size="15" /></button>
       <button title="左对齐" :class="{ active: props.note.textAlign === 'left' }" @click="emit('update', { textAlign: 'left' }, true)"><AlignLeft :size="15" /></button>
       <button title="居中" :class="{ active: props.note.textAlign === 'center' }" @click="emit('update', { textAlign: 'center' }, true)"><AlignCenter :size="15" /></button>
-      <button title="置顶" @click="emit('front')"><ChevronsUp :size="15" /></button>
+      <button :title="frontTitle" :class="{ active: props.note.pinned }" @click="emit('front')"><ChevronsUp :size="15" /></button>
       <button title="标签" :class="{ active: showTags }" @click="showTags = !showTags"><Tags :size="15" /></button>
       <button title="复制" @click="emit('duplicate')"><Copy :size="15" /></button>
       <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>

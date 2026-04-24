@@ -57,6 +57,8 @@ struct StickyNote {
     color: String,
     rotation: f64,
     z_index: i64,
+    #[serde(default)]
+    pinned: bool,
     tags: Vec<String>,
     font_size: f64,
     font_weight: String,
@@ -183,6 +185,7 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
             color TEXT NOT NULL,
             rotation REAL NOT NULL,
             z_index INTEGER NOT NULL,
+            pinned INTEGER NOT NULL DEFAULT 0,
             font_size REAL NOT NULL,
             font_weight TEXT NOT NULL,
             text_align TEXT NOT NULL,
@@ -219,6 +222,7 @@ fn init_schema(conn: &Connection) -> Result<(), String> {
     add_column_if_missing(conn, "canvases", "viewport_scale", "REAL")?;
     add_column_if_missing(conn, "notes", "content_json", "TEXT")?;
     add_column_if_missing(conn, "notes", "decoration", "TEXT")?;
+    add_column_if_missing(conn, "notes", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
     Ok(())
 }
 
@@ -332,9 +336,9 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
     for note in &app_data.notes {
         tx.execute(
             "INSERT INTO notes (
-                id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
+                id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned,
                 font_size, font_weight, text_align, decoration, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             params![
                 note.id,
                 note.canvas_id,
@@ -348,6 +352,7 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
                 note.color,
                 note.rotation,
                 note.z_index,
+                note.pinned as i64,
                 note.font_size,
                 note.font_weight,
                 note.text_align,
@@ -427,9 +432,9 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
     let tx = conn.transaction().map_err(|error| error.to_string())?;
     tx.execute(
         "INSERT INTO notes (
-            id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
+            id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned,
             font_size, font_weight, text_align, decoration, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
         ON CONFLICT(id) DO UPDATE SET
             canvas_id = excluded.canvas_id,
             title = excluded.title,
@@ -442,6 +447,7 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
             color = excluded.color,
             rotation = excluded.rotation,
             z_index = excluded.z_index,
+            pinned = excluded.pinned,
             font_size = excluded.font_size,
             font_weight = excluded.font_weight,
             text_align = excluded.text_align,
@@ -460,6 +466,7 @@ fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<(), String> {
             note.color,
             note.rotation,
             note.z_index,
+            note.pinned as i64,
             note.font_size,
             note.font_weight,
             note.text_align,
@@ -656,10 +663,10 @@ fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
 fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
     let mut statement = conn
         .prepare(
-            "SELECT id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index,
+            "SELECT id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned,
                     font_size, font_weight, text_align, decoration, created_at, updated_at
              FROM notes
-             ORDER BY z_index ASC",
+             ORDER BY pinned ASC, z_index ASC",
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -679,14 +686,15 @@ fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
                 color: row.get(9)?,
                 rotation: row.get(10)?,
                 z_index: row.get(11)?,
+                pinned: row.get::<_, i64>(12)? != 0,
                 tags: Vec::new(),
-                font_size: row.get(12)?,
-                font_weight: row.get(13)?,
-                text_align: row.get(14)?,
-                decoration: row.get(15)?,
+                font_size: row.get(13)?,
+                font_weight: row.get(14)?,
+                text_align: row.get(15)?,
+                decoration: row.get(16)?,
                 checked_items: None,
-                created_at: row.get(16)?,
-                updated_at: row.get(17)?,
+                created_at: row.get(17)?,
+                updated_at: row.get(18)?,
             })
         })
         .map_err(|error| error.to_string())?;

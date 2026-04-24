@@ -8,6 +8,7 @@ const now = () => new Date().toISOString();
 const randomRotation = () => Math.round((Math.random() * 4 - 2) * 10) / 10;
 const hasMeaningfulChange = (before: StickyNote, after: StickyNote) =>
   JSON.stringify({ ...before, updatedAt: undefined }) !== JSON.stringify({ ...after, updatedAt: undefined });
+const pinnedValue = (note: StickyNote) => note.pinned === true;
 const saveNoteSafely = (note: StickyNote) => {
   void saveNoteData(note).catch((error) => reportPersistenceError("保存便签", error));
 };
@@ -31,8 +32,29 @@ export const useNoteStore = defineStore("note", {
   actions: {
     setNotes(notes: StickyNote[]) {
       this.notes = notes;
+      this.normalizeZIndexes();
       this.selectedIds = [];
       this.editingId = "";
+    },
+    maxZForPinned(pinned: boolean) {
+      return Math.max(0, ...this.notes.filter((note) => pinnedValue(note) === pinned).map((note) => note.zIndex));
+    },
+    normalizeZIndexes() {
+      const ordered = [...this.notes].sort((a, b) => {
+        if (pinnedValue(a) !== pinnedValue(b)) return Number(pinnedValue(a)) - Number(pinnedValue(b));
+        if (a.zIndex !== b.zIndex) return a.zIndex - b.zIndex;
+        return a.createdAt.localeCompare(b.createdAt);
+      });
+      const changed: StickyNote[] = [];
+      ordered.forEach((note, index) => {
+        const nextZ = index + 1;
+        if (note.zIndex !== nextZ) {
+          note.zIndex = nextZ;
+          note.updatedAt = now();
+          changed.push(note);
+        }
+      });
+      return changed;
     },
     notesForCanvas(canvasId: string, tagId = "", query = "") {
       const normalized = query.trim().toLowerCase();
@@ -60,7 +82,8 @@ export const useNoteStore = defineStore("note", {
         height: preset.height,
         color: preset.color,
         rotation: rotationEnabled ? randomRotation() : 0,
-        zIndex: this.maxZ + 1,
+        zIndex: this.maxZForPinned(false) + 1,
+        pinned: false,
         tags: [],
         fontSize,
         fontWeight: "normal",
@@ -70,6 +93,7 @@ export const useNoteStore = defineStore("note", {
         updatedAt: now(),
       };
       this.notes.push(note);
+      this.normalizeZIndexes().forEach(saveNoteSafely);
       this.selectedIds = [note.id];
       this.addHistory({ type: "create", after: { ...note } });
       saveNoteSafely(note);
@@ -133,11 +157,12 @@ export const useNoteStore = defineStore("note", {
         id: nanoid(),
         x: note.x + 28,
         y: note.y + 28,
-        zIndex: this.maxZ + 1,
+        zIndex: this.maxZForPinned(pinnedValue(note)) + 1,
         createdAt: now(),
         updatedAt: now(),
       };
       this.notes.push(copy);
+      this.normalizeZIndexes().forEach(saveNoteSafely);
       this.selectedIds = [copy.id];
       this.addHistory({ type: "create", after: { ...copy } });
       saveNoteSafely(copy);
@@ -150,11 +175,12 @@ export const useNoteStore = defineStore("note", {
         id: nanoid(),
         x: note.x + 28 + index * 8,
         y: note.y + 28 + index * 8,
-        zIndex: this.maxZ + index + 1,
+        zIndex: this.maxZForPinned(pinnedValue(note)) + index + 1,
         createdAt: now(),
         updatedAt: now(),
       }));
       this.notes.push(...copies);
+      this.normalizeZIndexes().forEach(saveNoteSafely);
       this.selectedIds = copies.map((note) => note.id);
       copies.forEach((note) => {
         this.addHistory({ type: "create", after: { ...note } });
@@ -176,11 +202,12 @@ export const useNoteStore = defineStore("note", {
         canvasId,
         x: x + (note.x - minX) + index * 8,
         y: y + (note.y - minY) + index * 8,
-        zIndex: this.maxZ + index + 1,
+        zIndex: this.maxZForPinned(pinnedValue(note)) + index + 1,
         createdAt: now(),
         updatedAt: now(),
       }));
       this.notes.push(...copies);
+      this.normalizeZIndexes().forEach(saveNoteSafely);
       this.selectedIds = copies.map((note) => note.id);
       copies.forEach((note) => {
         this.addHistory({ type: "create", after: { ...note } });
@@ -193,7 +220,17 @@ export const useNoteStore = defineStore("note", {
     },
     bringSelectedToFront() {
       const selected = this.notes.filter((note) => this.selectedIds.includes(note.id));
-      selected.forEach((note, index) => this.updateNote(note.id, { zIndex: this.maxZ + index + 1 }));
+      if (!selected.length) return;
+      const targetPinned = !selected.every((note) => pinnedValue(note));
+      selected.forEach((note, index) => {
+        const before = { ...note };
+        note.pinned = targetPinned;
+        note.zIndex = this.maxZForPinned(targetPinned) + index + 1;
+        note.updatedAt = now();
+        if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
+      });
+      this.normalizeZIndexes().forEach(saveNoteSafely);
+      selected.forEach(saveNoteSafely);
     },
     updateSelected(patch: Partial<StickyNote>) {
       this.selectedIds.forEach((id) => this.updateNote(id, patch));
@@ -219,7 +256,15 @@ export const useNoteStore = defineStore("note", {
       });
     },
     bringToFront(id: string) {
-      this.updateNote(id, { zIndex: this.maxZ + 1 });
+      const note = this.notes.find((item) => item.id === id);
+      if (!note) return;
+      const before = { ...note };
+      note.pinned = !pinnedValue(note);
+      note.zIndex = this.maxZForPinned(note.pinned) + 1;
+      note.updatedAt = now();
+      if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
+      this.normalizeZIndexes().forEach(saveNoteSafely);
+      saveNoteSafely(note);
     },
     select(id: string, additive = false) {
       if (!additive) {

@@ -31,6 +31,7 @@ const baseNote = (
   color,
   rotation,
   zIndex,
+  pinned: false,
   tags,
   fontSize,
   fontWeight: "normal",

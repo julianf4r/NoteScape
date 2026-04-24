@@ -27,6 +27,7 @@ export interface StickyNote {
   color: NoteColor;
   rotation: number;
   zIndex: number;
+  pinned?: boolean;
   tags: string[];
   fontSize: number;
   fontWeight: "normal" | "medium" | "bold";

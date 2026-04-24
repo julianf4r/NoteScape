@@ -491,7 +491,9 @@ watch(
       <template v-if="contextMenu.noteId">
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
         <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制</button>
-        <button @click="bringSelectionToFront(contextMenu!.noteId!); contextMenu = null">置顶</button>
+        <button @click="bringSelectionToFront(contextMenu!.noteId!); contextMenu = null">
+          {{ noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.pinned ? "取消置顶" : "置顶" }}
+        </button>
         <button @click="deleteSelection(contextMenu!.noteId!); contextMenu = null">删除</button>
         <div class="context-section">
           <span>颜色</span>
