@@ -27,7 +27,7 @@ const boardSize = reactive({ width: 0, height: 0 });
 const handActive = ref(false);
 const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
-const contextMenu = ref<{ x: number; y: number; noteId?: string } | null>(null);
+const contextMenu = ref<{ x: number; y: number; noteId?: string; linkHref?: string } | null>(null);
 const contextWorld = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -206,13 +206,13 @@ function openCanvasMenu(event: MouseEvent) {
   contextMenu.value = { x: event.clientX, y: event.clientY };
 }
 
-function openNoteMenu(event: MouseEvent, id: string) {
+function openNoteMenu(event: MouseEvent, id: string, linkHref?: string) {
   noteStore.select(id);
   if (board.value) {
     const rect = board.value.getBoundingClientRect();
     contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
   }
-  contextMenu.value = { x: event.clientX, y: event.clientY, noteId: id };
+  contextMenu.value = { x: event.clientX, y: event.clientY, noteId: id, linkHref };
 }
 
 function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
@@ -285,6 +285,11 @@ async function copyNoteText(noteId: string) {
   }
   await navigator.clipboard.writeText(text);
   feedback.notify("文字已复制", "success");
+}
+
+async function copyLink(href: string) {
+  await navigator.clipboard.writeText(href);
+  feedback.notify("链接已复制", "success");
 }
 
 function bringSelectionToFront(noteId: string) {
@@ -518,7 +523,7 @@ watch(
         @duplicate="duplicateSelection(note.id)"
         @copy-text="copyNoteText(note.id)"
         @front="bringSelectionToFront(note.id)"
-        @context="(event) => openNoteMenu(event, note.id)"
+        @context="(event, linkHref) => openNoteMenu(event, note.id, linkHref)"
         @editing-done="noteStore.stopEditing()"
         @toggle-tag="(tagId) => toggleTagForSelection(note.id, tagId)"
       />
@@ -561,6 +566,7 @@ watch(
       @contextmenu.prevent.stop
     >
       <template v-if="contextMenu.noteId">
+        <button v-if="contextMenu.linkHref" @click="copyLink(contextMenu!.linkHref!); contextMenu = null">复制链接</button>
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
         <button @click="copyNoteText(contextMenu!.noteId!); contextMenu = null">复制文字</button>
         <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制便签</button>

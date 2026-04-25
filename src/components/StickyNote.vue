@@ -36,7 +36,7 @@ const emit = defineEmits<{
   duplicate: [];
   copyText: [];
   front: [];
-  context: [event: MouseEvent];
+  context: [event: MouseEvent, linkHref?: string];
   editingDone: [];
   toggleTag: [tagId: string];
 }>();
@@ -255,7 +255,8 @@ function onContextMenu(event: MouseEvent) {
   }
   event.preventDefault();
   event.stopPropagation();
-  emit("context", event);
+  const link = props.editing ? null : (event.target as HTMLElement).closest("a");
+  emit("context", event, link?.getAttribute("href") || link?.href);
 }
 
 function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: boolean; state: { selection: { empty: boolean } } } }) {
