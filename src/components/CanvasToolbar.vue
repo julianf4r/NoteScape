@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { ChevronDown, Hand, Minus, Plus, RotateCcw, RotateCw, SlidersHorizontal, StickyNote } from "lucide-vue-next";
 
 const props = defineProps<{
@@ -21,12 +21,37 @@ const emit = defineEmits<{
 
 const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 const zoomOpen = ref(false);
+const zoomMenu = ref<HTMLElement>();
 const zoomLabel = computed(() => `${Math.round(props.scale * 100)}%`);
 
 function selectZoom(scale: number) {
   emit("setZoom", scale);
   zoomOpen.value = false;
 }
+
+function toggleZoom() {
+  zoomOpen.value = !zoomOpen.value;
+  if (!zoomOpen.value) return;
+  window.addEventListener("mousedown", closeZoomOnOutside);
+  window.addEventListener("keydown", closeZoomOnEscape);
+}
+
+function closeZoom() {
+  zoomOpen.value = false;
+  window.removeEventListener("mousedown", closeZoomOnOutside);
+  window.removeEventListener("keydown", closeZoomOnEscape);
+}
+
+function closeZoomOnOutside(event: MouseEvent) {
+  if (zoomMenu.value?.contains(event.target as Node)) return;
+  closeZoom();
+}
+
+function closeZoomOnEscape(event: KeyboardEvent) {
+  if (event.key === "Escape") closeZoom();
+}
+
+onBeforeUnmount(closeZoom);
 </script>
 
 <template>
@@ -38,8 +63,8 @@ function selectZoom(scale: number) {
     <button title="新建便签" @click="emit('add')"><StickyNote :size="20" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>
-    <div class="zoom-menu" @mousedown.stop @mouseleave="zoomOpen = false">
-      <button class="zoom-trigger" title="缩放比例" @click="zoomOpen = !zoomOpen">
+    <div ref="zoomMenu" class="zoom-menu" @mousedown.stop>
+      <button class="zoom-trigger" title="缩放比例" @click="toggleZoom">
         <span>{{ zoomLabel }}</span>
         <ChevronDown :size="15" />
       </button>
