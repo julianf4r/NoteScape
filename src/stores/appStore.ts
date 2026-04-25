@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import type { AppData } from "../types";
-import { createDefaultData, loadData, parseData, saveData, switchDatabase } from "../utils/storage";
+import { createDatabase, createDefaultData, loadData, parseData, saveData, switchDatabase } from "../utils/storage";
 import { useCanvasStore } from "./canvasStore";
 import { useNoteStore } from "./noteStore";
 import { useSettingsStore } from "./settingsStore";
@@ -68,7 +68,12 @@ export const useAppStore = defineStore("app", {
       void this.persist(true);
     },
     async changeDatabase(dbPath: string) {
-      const result = await switchDatabase(dbPath, this.snapshot());
+      const result = await switchDatabase(dbPath);
+      this.databasePath = result.db_path;
+      this.applyData(parseData(result.data));
+    },
+    async createDatabase(dbPath: string) {
+      const result = await createDatabase(dbPath);
       this.databasePath = result.db_path;
       this.applyData(parseData(result.data));
     },

@@ -88,7 +88,7 @@ async function createDatabase() {
   });
   if (!selected) return;
   try {
-    await appStore.changeDatabase(selected);
+    await appStore.createDatabase(selected);
     dbMessage.value = "已创建并切换数据库文件";
     feedback.notify(dbMessage.value, "success");
   } catch (error) {
@@ -113,23 +113,6 @@ async function backupCurrentDatabase() {
   }
 }
 
-async function restoreDatabase() {
-  const selected = await open({
-    multiple: false,
-    directory: false,
-    filters: [{ name: "SQLite 数据库", extensions: ["sqlite", "sqlite3", "db"] }],
-  });
-  if (typeof selected !== "string") return;
-  if (!feedback.confirm("恢复数据库会切换到所选数据库文件，是否继续？")) return;
-  try {
-    await appStore.changeDatabase(selected);
-    dbMessage.value = "数据库已恢复";
-    feedback.notify(dbMessage.value, "success");
-  } catch (error) {
-    dbMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`恢复数据库失败：${dbMessage.value}`, "error");
-  }
-}
 </script>
 
 <template>
@@ -172,13 +155,10 @@ async function restoreDatabase() {
       <section>
         <h3>数据库</h3>
         <div class="db-path">{{ appStore.databasePath || "未加载" }}</div>
-        <div class="actions two">
-          <button @click="chooseDatabase">选择数据库</button>
-          <button @click="createDatabase">新建数据库</button>
-        </div>
-        <div class="actions two">
-          <button @click="backupCurrentDatabase">备份数据库</button>
-          <button @click="restoreDatabase">恢复数据库</button>
+        <div class="actions three">
+          <button @click="chooseDatabase">切换</button>
+          <button @click="createDatabase">新建</button>
+          <button @click="backupCurrentDatabase">备份</button>
         </div>
         <p v-if="dbMessage" class="hint">{{ dbMessage }}</p>
       </section>
@@ -206,6 +186,27 @@ async function restoreDatabase() {
   display: flex;
   justify-content: flex-end;
   background: rgba(15, 23, 42, 0.14);
+}
+
+:global(.settings-drawer-enter-active),
+:global(.settings-drawer-leave-active) {
+  transition: background-color 0.18s ease;
+}
+
+:global(.settings-drawer-enter-active .panel),
+:global(.settings-drawer-leave-active .panel) {
+  transition: transform 0.18s ease, opacity 0.18s ease;
+}
+
+:global(.settings-drawer-enter-from),
+:global(.settings-drawer-leave-to) {
+  background: rgba(15, 23, 42, 0);
+}
+
+:global(.settings-drawer-enter-from .panel),
+:global(.settings-drawer-leave-to .panel) {
+  opacity: 0;
+  transform: translateX(100%);
 }
 
 .panel {
@@ -284,6 +285,10 @@ input[type="number"] {
 
 .actions.two {
   grid-template-columns: repeat(2, 1fr);
+}
+
+.actions.three {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .actions button {

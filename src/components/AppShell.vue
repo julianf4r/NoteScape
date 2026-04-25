@@ -99,7 +99,9 @@ watch(
     <main class="workspace">
       <CanvasBoard />
     </main>
-    <SettingsPanel v-if="settingsStore.panelOpen" />
+    <Transition name="settings-drawer">
+      <SettingsPanel v-if="settingsStore.panelOpen" />
+    </Transition>
     <ToastHost />
   </div>
 </template>

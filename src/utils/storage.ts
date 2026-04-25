@@ -65,7 +65,7 @@ export function createDefaultData(): AppData {
     ],
     tags: [],
     settings: defaultSettings,
-    notes: [baseNote("note-default", "双击编辑便签", 360, 260, 220, 180, "yellow", -1.5, 1, [], defaultSettings.defaultFontSize)],
+    notes: [baseNote("note-default", "", 360, 260, 260, 220, "yellow", -1.5, 1, [], defaultSettings.defaultFontSize)],
   };
 }
 
@@ -145,10 +145,16 @@ export function reportPersistenceError(scope: string, error: unknown) {
   );
 }
 
-export async function switchDatabase(dbPath: string, fallbackData: AppData): Promise<DatabaseLoadResult> {
+export async function switchDatabase(dbPath: string): Promise<DatabaseLoadResult> {
   return invoke<DatabaseLoadResult>("set_database_path", {
     dbPath,
-    fallbackData: JSON.stringify(fallbackData),
+  });
+}
+
+export async function createDatabase(dbPath: string): Promise<DatabaseLoadResult> {
+  return invoke<DatabaseLoadResult>("create_database", {
+    dbPath,
+    initialData: JSON.stringify(createDefaultData()),
   });
 }
 

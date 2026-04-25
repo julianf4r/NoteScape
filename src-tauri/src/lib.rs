@@ -570,6 +570,43 @@ fn load_or_seed(path: &Path, fallback_data: &str) -> Result<String, String> {
     serde_json::to_string(&load_structured_data(&conn)?).map_err(|error| error.to_string())
 }
 
+fn required_table_exists(conn: &Connection, name: &str) -> Result<bool, String> {
+    let exists: Option<i64> = conn
+        .query_row(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            params![name],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    Ok(exists.is_some())
+}
+
+fn validate_existing_database(conn: &Connection) -> Result<(), String> {
+    let required_tables = ["app_meta", "canvases", "notes", "tags", "note_tags", "checklist_items"];
+    for table in required_tables {
+        if !required_table_exists(conn, table)? {
+            return Err("所选文件不是有效的贴境数据库，缺少必要的数据表".to_string());
+        }
+    }
+    let canvas_count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM canvases", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    if canvas_count < 1 {
+        return Err("所选数据库没有画布数据，不能切换".to_string());
+    }
+    Ok(())
+}
+
+fn load_existing_database(path: &Path) -> Result<String, String> {
+    if !path.exists() {
+        return Err("所选数据库文件不存在".to_string());
+    }
+    let conn = Connection::open(path).map_err(|_| "无法打开所选文件，它不是有效的 SQLite 数据库".to_string())?;
+    validate_existing_database(&conn)?;
+    serde_json::to_string(&load_structured_data(&conn)?).map_err(|error| error.to_string())
+}
+
 fn legacy_app_state_data(conn: &Connection) -> Result<Option<String>, String> {
     let exists: Option<i64> = conn
         .query_row(
@@ -864,10 +901,27 @@ fn backup_database(app: AppHandle, backup_path: String) -> Result<(), String> {
 fn set_database_path(
     app: AppHandle,
     db_path: String,
-    fallback_data: String,
 ) -> Result<DatabaseLoadResult, String> {
     let path = PathBuf::from(db_path);
-    let data = load_or_seed(&path, &fallback_data)?;
+    let data = load_existing_database(&path)?;
+    write_database_path(&app, &path)?;
+    Ok(DatabaseLoadResult {
+        data,
+        db_path: path.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+fn create_database(
+    app: AppHandle,
+    db_path: String,
+    initial_data: String,
+) -> Result<DatabaseLoadResult, String> {
+    let path = PathBuf::from(db_path);
+    let mut conn = open_database(&path)?;
+    let app_data = parse_app_data(&initial_data)?;
+    save_structured_data(&mut conn, &app_data)?;
+    let data = serde_json::to_string(&load_structured_data(&conn)?).map_err(|error| error.to_string())?;
     write_database_path(&app, &path)?;
     Ok(DatabaseLoadResult {
         data,
@@ -885,6 +939,7 @@ pub fn run() {
             load_app_data,
             save_app_data,
             set_database_path,
+            create_database,
             save_canvas,
             delete_canvas,
             restore_canvas,
