@@ -87,6 +87,12 @@ export async function loadData(): Promise<DatabaseLoadResult> {
   });
 }
 
+export async function resetDatabaseToDefault(): Promise<DatabaseLoadResult> {
+  return invoke<DatabaseLoadResult>("reset_database_to_default", {
+    defaultData: JSON.stringify(createDefaultData()),
+  });
+}
+
 export async function saveData(data: AppData) {
   await invoke("save_app_data", { data: JSON.stringify(data) });
 }

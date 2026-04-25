@@ -2,6 +2,7 @@
 import { computed, nextTick, ref } from "vue";
 import { Archive, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
 import SearchBox from "./SearchBox.vue";
+import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -9,6 +10,7 @@ import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import packageInfo from "../../package.json";
 
+const appStore = useAppStore();
 const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
 const tagStore = useTagStore();
@@ -54,6 +56,10 @@ function relativeTime(value: string) {
 }
 
 function createCanvas() {
+  if (!appStore.databaseReady) {
+    feedback.notify(appStore.loadError || "数据库未加载", "error");
+    return;
+  }
   const canvas = canvasStore.createCanvas();
   noteStore.clearSelection();
   showTrash.value = false;
@@ -108,6 +114,10 @@ function removeForever(id: string, name: string) {
 }
 
 function createTag() {
+  if (!appStore.databaseReady) {
+    feedback.notify(appStore.loadError || "数据库未加载", "error");
+    return;
+  }
   const tag = tagStore.createTag();
   startRenameTag(tag.id, tag.name, tag.color);
 }
@@ -222,7 +232,7 @@ function selectSearchCanvas(id: string) {
       <section class="section">
       <div class="section-title">
         <span>画布</span>
-        <button class="new-button" @click="createCanvas"><Plus :size="15" />新建</button>
+        <button class="new-button" :disabled="!appStore.databaseReady" @click="createCanvas"><Plus :size="15" />新建</button>
       </div>
 
       <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
@@ -274,7 +284,7 @@ function selectSearchCanvas(id: string) {
       <section class="section tags">
       <div class="section-title">
         <span>标签</span>
-        <button class="small-add" @click="createTag"><Plus :size="18" /></button>
+        <button class="small-add" :disabled="!appStore.databaseReady" @click="createTag"><Plus :size="18" /></button>
       </div>
       <button
         v-for="tag in tagStore.tags"
@@ -465,6 +475,13 @@ function selectSearchCanvas(id: string) {
 .small-add {
   width: 34px;
   padding: 0;
+}
+
+.new-button:disabled,
+.small-add:disabled {
+  cursor: not-allowed;
+  color: #9ca3af;
+  background: #f3f4f6;
 }
 
 .canvas-row,

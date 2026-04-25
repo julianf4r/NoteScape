@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import CanvasToolbar from "./CanvasToolbar.vue";
 import MiniMap from "./MiniMap.vue";
 import StickyNote from "./StickyNote.vue";
+import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
@@ -12,6 +13,7 @@ import type { NoteColor, StickyNote as StickyNoteType, ViewportState } from "../
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 
+const appStore = useAppStore();
 const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
 const tagStore = useTagStore();
@@ -462,10 +464,15 @@ watch(
     @wheel="onWheel"
     @contextmenu.prevent="openCanvasMenu"
   >
-    <div v-if="!canvasStore.currentCanvasId" class="empty-board">还没有画布<br />点击“新建”开始整理你的想法</div>
+    <div v-if="appStore.loaded && !appStore.databaseReady" class="empty-board database-error">
+      数据库未加载<br />
+      <span>{{ appStore.loadError }}</span>
+      <button @click.stop="settingsStore.togglePanel()">处理数据库</button>
+    </div>
+    <div v-else-if="!canvasStore.currentCanvasId" class="empty-board">还没有画布<br />点击“新建”开始整理你的想法</div>
     <div v-else-if="!visibleNotes.length" class="empty-board">双击画布空白处创建第一张便签</div>
 
-    <div class="canvas-content" :style="{ transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})` }">
+    <div v-if="appStore.databaseReady" class="canvas-content" :style="{ transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})` }">
       <StickyNote
         v-for="note in visibleNotes"
         :key="note.id"
@@ -509,6 +516,7 @@ watch(
     />
 
     <MiniMap
+      v-if="appStore.databaseReady"
       :notes="visibleNotes"
       :viewport="viewport"
       :board-width="boardSize.width"
@@ -600,6 +608,31 @@ watch(
   border: 1px solid #eceff3;
   border-radius: 8px;
   transform: translate(-50%, -50%);
+}
+
+.empty-board.database-error {
+  width: min(520px, calc(100% - 48px));
+  color: #991b1b;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: #fecaca;
+}
+
+.empty-board.database-error span {
+  display: block;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.empty-board.database-error button {
+  height: 34px;
+  margin-top: 12px;
+  padding: 0 12px;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
 }
 
 .selection-box {

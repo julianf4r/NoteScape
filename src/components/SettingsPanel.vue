@@ -19,6 +19,11 @@ const dataMessage = ref("");
 const settings = computed(() => settingsStore.settings);
 
 async function exportData() {
+  if (!appStore.databaseReady) {
+    dataMessage.value = appStore.loadError || "数据库未加载";
+    feedback.notify(`导出失败：${dataMessage.value}`, "error");
+    return;
+  }
   const selected = await save({
     defaultPath: "notescape-data.json",
     filters: [{ name: "JSON 数据", extensions: ["json"] }],
@@ -35,6 +40,11 @@ async function exportData() {
 }
 
 function importData() {
+  if (!appStore.databaseReady) {
+    dataMessage.value = appStore.loadError || "数据库未加载";
+    feedback.notify(`导入失败：${dataMessage.value}`, "error");
+    return;
+  }
   if (!importText.value.trim()) return;
   try {
     appStore.importData(importText.value);
@@ -48,6 +58,11 @@ function importData() {
 }
 
 async function importFromFile() {
+  if (!appStore.databaseReady) {
+    dataMessage.value = appStore.loadError || "数据库未加载";
+    feedback.notify(`导入失败：${dataMessage.value}`, "error");
+    return;
+  }
   const selected = await open({
     multiple: false,
     directory: false,
@@ -94,6 +109,17 @@ async function createDatabase() {
   } catch (error) {
     dbMessage.value = error instanceof Error ? error.message : String(error);
     feedback.notify(`创建数据库失败：${dbMessage.value}`, "error");
+  }
+}
+
+async function useDefaultDatabase() {
+  try {
+    await appStore.useDefaultDatabase();
+    dbMessage.value = "已回退到默认数据库";
+    feedback.notify(dbMessage.value, "success");
+  } catch (error) {
+    dbMessage.value = error instanceof Error ? error.message : String(error);
+    feedback.notify(`回退默认数据库失败：${dbMessage.value}`, "error");
   }
 }
 
@@ -154,11 +180,13 @@ async function backupCurrentDatabase() {
 
       <section>
         <h3>数据库</h3>
+        <p v-if="appStore.loadError" class="load-error">{{ appStore.loadError }}</p>
         <div class="db-path">{{ appStore.databasePath || "未加载" }}</div>
-        <div class="actions three">
+        <div class="actions database-actions">
           <button @click="chooseDatabase">切换</button>
           <button @click="createDatabase">新建</button>
-          <button @click="backupCurrentDatabase">备份</button>
+          <button @click="useDefaultDatabase">默认</button>
+          <button :disabled="!appStore.databaseReady" @click="backupCurrentDatabase">备份</button>
         </div>
         <p v-if="dbMessage" class="hint">{{ dbMessage }}</p>
       </section>
@@ -166,11 +194,11 @@ async function backupCurrentDatabase() {
       <section>
         <h3>数据</h3>
         <div class="actions">
-          <button @click="exportData"><Download :size="16" />导出</button>
-          <button @click="importFromFile"><Upload :size="16" />导入文件</button>
+          <button :disabled="!appStore.databaseReady" @click="exportData"><Download :size="16" />导出</button>
+          <button :disabled="!appStore.databaseReady" @click="importFromFile"><Upload :size="16" />导入文件</button>
         </div>
-        <textarea v-model="importText" placeholder="粘贴 JSON 数据后点击下方按钮导入"></textarea>
-        <button class="wide-action" @click="importData">导入粘贴的数据</button>
+        <textarea v-model="importText" :disabled="!appStore.databaseReady" placeholder="粘贴 JSON 数据后点击下方按钮导入"></textarea>
+        <button class="wide-action" :disabled="!appStore.databaseReady" @click="importData">导入粘贴的数据</button>
         <textarea v-if="exported" v-model="exported" readonly></textarea>
         <p v-if="dataMessage" class="hint">{{ dataMessage }}</p>
       </section>
@@ -291,6 +319,10 @@ input[type="number"] {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.actions.database-actions {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 .actions button {
   height: 34px;
   display: inline-flex;
@@ -303,12 +335,25 @@ input[type="number"] {
   border-radius: 7px;
 }
 
+.actions button:disabled,
+.wide-action:disabled {
+  cursor: not-allowed;
+  color: #9ca3af;
+  background: #f3f4f6;
+}
+
 textarea {
   min-height: 92px;
   margin-top: 8px;
   padding: 9px;
   resize: vertical;
   font-size: 12px;
+}
+
+textarea:disabled {
+  cursor: not-allowed;
+  color: #9ca3af;
+  background: #f3f4f6;
 }
 
 .db-path {
@@ -328,6 +373,17 @@ textarea {
   margin: 0;
   color: #2563eb;
   font-size: 13px;
+}
+
+.load-error {
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .save-status {

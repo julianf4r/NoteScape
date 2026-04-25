@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import type { AppData } from "../types";
-import { createDatabase, createDefaultData, loadData, parseData, saveData, switchDatabase } from "../utils/storage";
+import { createDatabase, loadData, parseData, resetDatabaseToDefault, saveData, switchDatabase } from "../utils/storage";
 import { useCanvasStore } from "./canvasStore";
 import { useNoteStore } from "./noteStore";
 import { useSettingsStore } from "./settingsStore";
@@ -10,6 +10,7 @@ import { useFeedbackStore } from "./feedbackStore";
 export const useAppStore = defineStore("app", {
   state: () => ({
     loaded: false,
+    databaseReady: false,
     databasePath: "",
     loadError: "",
     saveStatus: "idle" as "idle" | "saving" | "saved" | "error",
@@ -26,11 +27,13 @@ export const useAppStore = defineStore("app", {
       try {
         const result = await loadData();
         this.databasePath = result.db_path;
+        this.loadError = "";
+        this.databaseReady = true;
         this.applyData(parseData(result.data));
       } catch (error) {
         this.loadError = error instanceof Error ? error.message : String(error);
+        this.databaseReady = false;
         useFeedbackStore().notify(`数据库加载失败：${this.loadError}`, "error");
-        this.applyData(createDefaultData());
       }
       this.loaded = true;
     },
@@ -44,6 +47,12 @@ export const useAppStore = defineStore("app", {
       };
     },
     async persist(immediate = false) {
+      if (!this.databaseReady) {
+        this.saveStatus = "error";
+        this.statusMessage = this.loadError || "数据库未加载";
+        if (immediate) useFeedbackStore().notify(`保存失败：${this.statusMessage}`, "error");
+        return;
+      }
       const settings = useSettingsStore().settings;
       if (!settings.autoSave && !immediate) return;
       this.saveStatus = "saving";
@@ -70,11 +79,22 @@ export const useAppStore = defineStore("app", {
     async changeDatabase(dbPath: string) {
       const result = await switchDatabase(dbPath);
       this.databasePath = result.db_path;
+      this.loadError = "";
+      this.databaseReady = true;
       this.applyData(parseData(result.data));
     },
     async createDatabase(dbPath: string) {
       const result = await createDatabase(dbPath);
       this.databasePath = result.db_path;
+      this.loadError = "";
+      this.databaseReady = true;
+      this.applyData(parseData(result.data));
+    },
+    async useDefaultDatabase() {
+      const result = await resetDatabaseToDefault();
+      this.databasePath = result.db_path;
+      this.loadError = "";
+      this.databaseReady = true;
       this.applyData(parseData(result.data));
     },
   },

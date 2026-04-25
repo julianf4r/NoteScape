@@ -133,6 +133,18 @@ fn write_database_path(app: &AppHandle, db_path: &Path) -> Result<(), String> {
     fs::write(pref, db_path.to_string_lossy().as_bytes()).map_err(|error| error.to_string())
 }
 
+fn current_database_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let db_path = read_database_path(app)?;
+    let default_path = default_db_path(app)?;
+    if !db_path.exists() && db_path != default_path {
+        return Err(format!(
+            "当前数据库文件不存在：{}。请重新选择数据库、创建新数据库，或回退到默认数据库。",
+            db_path.to_string_lossy()
+        ));
+    }
+    Ok(db_path)
+}
+
 fn open_database(path: &Path) -> Result<Connection, String> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -780,6 +792,13 @@ fn load_checklist_items(
 #[tauri::command]
 fn load_app_data(app: AppHandle, default_data: String) -> Result<DatabaseLoadResult, String> {
     let db_path = read_database_path(&app)?;
+    let default_path = default_db_path(&app)?;
+    if !db_path.exists() && db_path != default_path {
+        return Err(format!(
+            "上次使用的数据库文件不存在：{}。请重新选择数据库、创建新数据库，或回退到默认数据库。",
+            db_path.to_string_lossy()
+        ));
+    }
     if !db_path.exists() {
         write_database_path(&app, &db_path)?;
     }
@@ -791,8 +810,22 @@ fn load_app_data(app: AppHandle, default_data: String) -> Result<DatabaseLoadRes
 }
 
 #[tauri::command]
+fn reset_database_to_default(
+    app: AppHandle,
+    default_data: String,
+) -> Result<DatabaseLoadResult, String> {
+    let db_path = default_db_path(&app)?;
+    let data = load_or_seed(&db_path, &default_data)?;
+    write_database_path(&app, &db_path)?;
+    Ok(DatabaseLoadResult {
+        data,
+        db_path: db_path.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
 fn save_app_data(app: AppHandle, data: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let mut conn = open_database(&db_path)?;
     let app_data = parse_app_data(&data)?;
     save_structured_data(&mut conn, &app_data)
@@ -800,7 +833,7 @@ fn save_app_data(app: AppHandle, data: String) -> Result<(), String> {
 
 #[tauri::command]
 fn save_canvas(app: AppHandle, canvas: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     let canvas: CanvasItem = serde_json::from_str(&canvas).map_err(|error| error.to_string())?;
     upsert_canvas(&conn, &canvas)
@@ -808,7 +841,7 @@ fn save_canvas(app: AppHandle, canvas: String) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_canvas(app: AppHandle, id: String, deleted_at: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     conn.execute(
         "UPDATE canvases SET deleted_at = ?1, updated_at = ?1 WHERE id = ?2",
@@ -820,7 +853,7 @@ fn delete_canvas(app: AppHandle, id: String, deleted_at: String) -> Result<(), S
 
 #[tauri::command]
 fn restore_canvas(app: AppHandle, id: String, updated_at: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     conn.execute(
         "UPDATE canvases SET deleted_at = NULL, updated_at = ?1 WHERE id = ?2",
@@ -832,7 +865,7 @@ fn restore_canvas(app: AppHandle, id: String, updated_at: String) -> Result<(), 
 
 #[tauri::command]
 fn remove_canvas_forever(app: AppHandle, id: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     conn.execute("DELETE FROM canvases WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
@@ -841,7 +874,7 @@ fn remove_canvas_forever(app: AppHandle, id: String) -> Result<(), String> {
 
 #[tauri::command]
 fn save_note(app: AppHandle, note: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let mut conn = open_database(&db_path)?;
     let note: StickyNote = serde_json::from_str(&note).map_err(|error| error.to_string())?;
     upsert_note(&mut conn, &note)
@@ -849,7 +882,7 @@ fn save_note(app: AppHandle, note: String) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_note(app: AppHandle, id: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     conn.execute("DELETE FROM notes WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
@@ -858,7 +891,7 @@ fn delete_note(app: AppHandle, id: String) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_notes_by_canvas(app: AppHandle, canvas_id: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     conn.execute("DELETE FROM notes WHERE canvas_id = ?1", params![canvas_id])
         .map_err(|error| error.to_string())?;
@@ -867,7 +900,7 @@ fn delete_notes_by_canvas(app: AppHandle, canvas_id: String) -> Result<(), Strin
 
 #[tauri::command]
 fn save_tag(app: AppHandle, tag: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     let tag: TagItem = serde_json::from_str(&tag).map_err(|error| error.to_string())?;
     upsert_tag(&conn, &tag)
@@ -875,7 +908,7 @@ fn save_tag(app: AppHandle, tag: String) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_tag(app: AppHandle, id: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
         .map_err(|error| error.to_string())?;
@@ -884,7 +917,7 @@ fn delete_tag(app: AppHandle, id: String) -> Result<(), String> {
 
 #[tauri::command]
 fn save_app_settings(app: AppHandle, settings: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     let conn = open_database(&db_path)?;
     let settings: AppSettings = serde_json::from_str(&settings).map_err(|error| error.to_string())?;
     save_settings(&conn, &settings)
@@ -892,7 +925,7 @@ fn save_app_settings(app: AppHandle, settings: String) -> Result<(), String> {
 
 #[tauri::command]
 fn backup_database(app: AppHandle, backup_path: String) -> Result<(), String> {
-    let db_path = read_database_path(&app)?;
+    let db_path = current_database_path(&app)?;
     fs::copy(db_path, backup_path).map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -938,6 +971,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_app_data,
             save_app_data,
+            reset_database_to_default,
             set_database_path,
             create_database,
             save_canvas,
