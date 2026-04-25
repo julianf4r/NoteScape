@@ -931,6 +931,16 @@ fn backup_database(app: AppHandle, backup_path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn export_json_file(path: String, data: String) -> Result<(), String> {
+    fs::write(path, data).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn import_json_file(path: String) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn set_database_path(
     app: AppHandle,
     db_path: String,
@@ -966,7 +976,6 @@ fn create_database(
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             load_app_data,
@@ -984,7 +993,9 @@ pub fn run() {
             save_tag,
             delete_tag,
             save_app_settings,
-            backup_database
+            backup_database,
+            export_json_file,
+            import_json_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -46,35 +46,38 @@ export const useAppStore = defineStore("app", {
         settings: useSettingsStore().settings,
       };
     },
-    async persist(immediate = false) {
+    async persist(immediate = false): Promise<boolean> {
       if (!this.databaseReady) {
         this.saveStatus = "error";
         this.statusMessage = this.loadError || "数据库未加载";
         if (immediate) useFeedbackStore().notify(`保存失败：${this.statusMessage}`, "error");
-        return;
+        return false;
       }
       const settings = useSettingsStore().settings;
-      if (!settings.autoSave && !immediate) return;
+      if (!settings.autoSave && !immediate) return true;
       this.saveStatus = "saving";
       try {
         await saveData(this.snapshot());
         this.saveStatus = "saved";
         this.statusMessage = immediate ? "已手动保存" : "已保存";
         if (immediate) useFeedbackStore().notify(this.statusMessage, "success");
+        return true;
       } catch (error) {
         this.saveStatus = "error";
         this.statusMessage = error instanceof Error ? error.message : String(error);
         useFeedbackStore().notify(`保存失败：${this.statusMessage}`, "error");
+        return false;
       }
     },
     exportData() {
       return JSON.stringify(this.snapshot(), null, 2);
     },
-    importData(raw: string) {
+    async importData(raw: string) {
       const data = JSON.parse(raw) as AppData;
       if (!Array.isArray(data.canvases) || !Array.isArray(data.notes)) throw new Error("数据格式不正确");
       this.applyData(data);
-      void this.persist(true);
+      const saved = await this.persist(true);
+      if (!saved) throw new Error(this.statusMessage || "保存失败");
     },
     async changeDatabase(dbPath: string) {
       const result = await switchDatabase(dbPath);

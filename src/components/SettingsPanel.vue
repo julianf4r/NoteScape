@@ -2,11 +2,10 @@
 import { computed, ref } from "vue";
 import { Download, Upload, X } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { useAppStore } from "../stores/appStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { backupDatabase } from "../utils/storage";
+import { backupDatabase, exportJsonFile, importJsonFile } from "../utils/storage";
 
 const appStore = useAppStore();
 const feedback = useFeedbackStore();
@@ -30,7 +29,7 @@ async function exportData() {
   });
   if (!selected) return;
   try {
-    await writeTextFile(selected, appStore.exportData());
+    await exportJsonFile(selected, appStore.exportData());
     dataMessage.value = "数据已导出";
     feedback.notify(dataMessage.value, "success");
   } catch (error) {
@@ -39,7 +38,7 @@ async function exportData() {
   }
 }
 
-function importData() {
+async function importData() {
   if (!appStore.databaseReady) {
     dataMessage.value = appStore.loadError || "数据库未加载";
     feedback.notify(`导入失败：${dataMessage.value}`, "error");
@@ -47,7 +46,7 @@ function importData() {
   }
   if (!importText.value.trim()) return;
   try {
-    appStore.importData(importText.value);
+    await appStore.importData(importText.value);
     importText.value = "";
     dataMessage.value = "数据已导入";
     feedback.notify(dataMessage.value, "success");
@@ -70,7 +69,7 @@ async function importFromFile() {
   });
   if (typeof selected !== "string") return;
   try {
-    appStore.importData(await readTextFile(selected));
+    await appStore.importData(await importJsonFile(selected));
     dataMessage.value = "数据已导入";
     feedback.notify(dataMessage.value, "success");
   } catch (error) {

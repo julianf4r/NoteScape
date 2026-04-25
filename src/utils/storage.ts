@@ -141,6 +141,14 @@ export async function backupDatabase(backupPath: string) {
   await invoke("backup_database", { backupPath });
 }
 
+export async function exportJsonFile(path: string, data: string) {
+  await invoke("export_json_file", { path, data });
+}
+
+export async function importJsonFile(path: string): Promise<string> {
+  return invoke<string>("import_json_file", { path });
+}
+
 export function reportPersistenceError(scope: string, error: unknown) {
   window.dispatchEvent(
     new CustomEvent("persistence-error", {
