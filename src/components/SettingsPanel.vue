@@ -10,7 +10,6 @@ import { backupDatabase, exportJsonFile, importJsonFile } from "../utils/storage
 const appStore = useAppStore();
 const feedback = useFeedbackStore();
 const settingsStore = useSettingsStore();
-const importText = ref("");
 const exported = ref("");
 const dbMessage = ref("");
 const dataMessage = ref("");
@@ -35,24 +34,6 @@ async function exportData() {
   } catch (error) {
     dataMessage.value = error instanceof Error ? error.message : String(error);
     feedback.notify(`导出失败：${dataMessage.value}`, "error");
-  }
-}
-
-async function importData() {
-  if (!appStore.databaseReady) {
-    dataMessage.value = appStore.loadError || "数据库未加载";
-    feedback.notify(`导入失败：${dataMessage.value}`, "error");
-    return;
-  }
-  if (!importText.value.trim()) return;
-  try {
-    await appStore.importData(importText.value);
-    importText.value = "";
-    dataMessage.value = "数据已导入";
-    feedback.notify(dataMessage.value, "success");
-  } catch (error) {
-    dataMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`导入失败：${dataMessage.value}`, "error");
   }
 }
 
@@ -193,11 +174,9 @@ async function backupCurrentDatabase() {
       <section>
         <h3>数据</h3>
         <div class="actions">
-          <button :disabled="!appStore.databaseReady" @click="exportData"><Download :size="16" />导出</button>
+          <button :disabled="!appStore.databaseReady" @click="exportData"><Download :size="16" />导出数据</button>
           <button :disabled="!appStore.databaseReady" @click="importFromFile"><Upload :size="16" />导入文件</button>
         </div>
-        <textarea v-model="importText" :disabled="!appStore.databaseReady" placeholder="粘贴 JSON 数据后点击下方按钮导入"></textarea>
-        <button class="wide-action" :disabled="!appStore.databaseReady" @click="importData">导入粘贴的数据</button>
         <textarea v-if="exported" v-model="exported" readonly></textarea>
         <p v-if="dataMessage" class="hint">{{ dataMessage }}</p>
       </section>
@@ -334,8 +313,7 @@ input[type="number"] {
   border-radius: 7px;
 }
 
-.actions button:disabled,
-.wide-action:disabled {
+.actions button:disabled {
   cursor: not-allowed;
   color: #9ca3af;
   background: #f3f4f6;
@@ -407,13 +385,4 @@ textarea:disabled {
   background: #fee2e2;
 }
 
-.wide-action {
-  width: 100%;
-  height: 34px;
-  margin-top: 8px;
-  color: #374151;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
-  border-radius: 7px;
-}
 </style>
