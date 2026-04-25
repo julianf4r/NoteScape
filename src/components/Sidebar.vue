@@ -123,6 +123,11 @@ function startRenameTag(id: string, name: string, color: string) {
   });
 }
 
+function changeTagColor(id: string, color: string) {
+  tagColorDraft.value = color;
+  tagStore.updateTagColor(id, color);
+}
+
 function commitTag(id: string) {
   const value = tagDraft.value.trim();
   if (value) tagStore.renameTag(id, value);
@@ -280,15 +285,15 @@ function selectSearchCanvas(id: string) {
         @dblclick="startRenameTag(tag.id, tag.name, tag.color)"
         @contextmenu.prevent="startRenameTag(tag.id, tag.name, tag.color)"
       >
-        <input
-          v-if="renamingTagId === tag.id"
-          v-model="tagColorDraft"
-          class="tag-color"
-          type="color"
-          @click.stop
-          @change="tagStore.updateTagColor(tag.id, tagColorDraft)"
-        />
-        <i v-else :style="{ backgroundColor: tag.color }"></i>
+        <label class="tag-color-control" title="修改颜色" @click.stop @dblclick.stop @mousedown.stop>
+          <i :style="{ backgroundColor: tag.color }"></i>
+          <input
+            type="color"
+            :value="tag.color"
+            @input="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+            @change="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+          />
+        </label>
         <input
           v-if="renamingTagId === tag.id"
           v-model="tagDraft"
@@ -601,11 +606,25 @@ function selectSearchCanvas(id: string) {
   margin-top: 14px;
 }
 
-.tag-row i {
+.tag-color-control {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
+}
+
+.tag-color-control i {
   width: 12px;
   height: 12px;
   margin-left: 2px;
   border-radius: 50%;
+}
+
+.tag-color-control:hover i {
+  outline: 2px solid rgba(59, 130, 246, 0.24);
+  outline-offset: 3px;
 }
 
 .tag-row b {
@@ -622,12 +641,13 @@ function selectSearchCanvas(id: string) {
   gap: 2px;
 }
 
-.tag-color {
-  width: 18px;
-  height: 18px;
-  padding: 0;
-  border: 0;
-  background: transparent;
+.tag-color-control input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .tag-name-input {
