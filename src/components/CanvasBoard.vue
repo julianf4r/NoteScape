@@ -612,11 +612,11 @@ watch(
 }
 
 .canvas-board.pan-ready {
-  cursor: grab;
+  cursor: move;
 }
 
 .canvas-board.panning {
-  cursor: grabbing;
+  cursor: move;
 }
 
 .canvas-content {

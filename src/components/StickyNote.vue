@@ -340,7 +340,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   border-radius: 2px 2px 8px 8px;
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.14), 0 2px 4px rgba(0, 0, 0, 0.08);
   transform-origin: center center;
-  cursor: grab;
+  cursor: move;
   user-select: none;
 }
 
@@ -357,8 +357,17 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   animation: pulse-note 1.4s ease;
 }
 
+.sticky-note.editing {
+  cursor: text;
+  user-select: text;
+}
+
 .sticky-note:active {
-  cursor: grabbing;
+  cursor: move;
+}
+
+.sticky-note.editing:active {
+  cursor: text;
 }
 
 .content {
@@ -402,6 +411,12 @@ mark {
   outline: 0;
   white-space: pre-wrap;
   line-height: 1.55;
+}
+
+.sticky-note.editing .editor-content,
+.sticky-note.editing .editor-content :deep(.tiptap) {
+  cursor: text;
+  user-select: text;
 }
 
 .editor-content :deep(p) {
