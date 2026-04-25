@@ -115,7 +115,10 @@ const style = computed(() => ({
 
 watch(
   () => props.editing,
-  async (editing) => {
+  async (editing, wasEditing) => {
+    if (!editing && wasEditing) {
+      commitEditorContent(false);
+    }
     editor.value?.setEditable(editing);
     if (editing) {
       draft.value = props.note.content;
@@ -183,10 +186,14 @@ function endResize() {
   resizeStart.value = undefined;
 }
 
-function saveEdit() {
+function commitEditorContent(finish: boolean) {
   const richEditor = editor.value;
   emit("update", { content: richEditor?.getText() ?? draft.value, contentJson: richEditor?.getJSON() }, true);
-  emit("editingDone");
+  if (finish) emit("editingDone");
+}
+
+function saveEdit() {
+  commitEditorContent(true);
 }
 
 function changeFontSize(delta: number) {

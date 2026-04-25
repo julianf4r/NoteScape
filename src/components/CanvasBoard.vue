@@ -244,9 +244,28 @@ function duplicateSelection(noteId: string) {
   else noteStore.duplicateNote(noteId);
 }
 
+function jsonNodeText(node: unknown): string {
+  if (!node || typeof node !== "object") return "";
+  const value = node as { text?: unknown; content?: unknown };
+  if (typeof value.text === "string") return value.text;
+  return Array.isArray(value.content) ? value.content.map(jsonNodeText).join("") : "";
+}
+
+function plainTextFromContentJson(value: unknown): string {
+  if (!value || typeof value !== "object") return "";
+  const node = value as { type?: unknown; content?: unknown };
+  if (Array.isArray(node.content)) {
+    if (node.type === "paragraph" || node.type === "heading" || node.type === "listItem" || node.type === "taskItem") {
+      return jsonNodeText(node);
+    }
+    return node.content.map(plainTextFromContentJson).filter(Boolean).join("\n");
+  }
+  return jsonNodeText(node);
+}
+
 async function copyNoteText(noteId: string) {
   const note = noteStore.notes.find((item) => item.id === noteId);
-  const text = note?.content ?? "";
+  const text = (note?.content?.trim() || plainTextFromContentJson(note?.contentJson).trim()) ?? "";
   if (!text) {
     feedback.notify("便签没有可复制的文字");
     return;
