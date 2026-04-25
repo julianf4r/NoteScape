@@ -7,6 +7,7 @@ import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
+import { useFeedbackStore } from "../stores/feedbackStore";
 import type { NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
@@ -15,6 +16,7 @@ const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
+const feedback = useFeedbackStore();
 
 const board = ref<HTMLElement>();
 const viewport = reactive<ViewportState>({ offsetX: 0, offsetY: 0, scale: 1 });
@@ -151,6 +153,11 @@ function stopPan() {
   saveViewport();
 }
 
+function isTextInputTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest(".tiptap, input, textarea, select, [contenteditable='true']"));
+}
+
 function isCanvasBlankTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return !target.closest(".sticky-note, .toolbar, .minimap, .menu-popover, .empty-board");
@@ -235,6 +242,17 @@ function deleteSelection(noteId: string) {
 function duplicateSelection(noteId: string) {
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.duplicateSelected();
   else noteStore.duplicateNote(noteId);
+}
+
+async function copyNoteText(noteId: string) {
+  const note = noteStore.notes.find((item) => item.id === noteId);
+  const text = note?.content ?? "";
+  if (!text) {
+    feedback.notify("便签没有可复制的文字");
+    return;
+  }
+  await navigator.clipboard.writeText(text);
+  feedback.notify("文字已复制", "success");
 }
 
 function bringSelectionToFront(noteId: string) {
@@ -345,6 +363,7 @@ function onLocateNote(event: Event) {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  if (isTextInputTarget(event.target)) return;
   if (event.code === "Space" && !noteStore.editingId) {
     event.preventDefault();
     spaceDown.value = true;
@@ -446,6 +465,7 @@ watch(
         @live="(patch) => noteStore.patchNoteLive(note.id, patch)"
         @delete="deleteSelection(note.id)"
         @duplicate="duplicateSelection(note.id)"
+        @copy-text="copyNoteText(note.id)"
         @front="bringSelectionToFront(note.id)"
         @context="(event) => openNoteMenu(event, note.id)"
         @editing-done="noteStore.stopEditing()"
@@ -490,7 +510,8 @@ watch(
     >
       <template v-if="contextMenu.noteId">
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
-        <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制</button>
+        <button @click="copyNoteText(contextMenu!.noteId!); contextMenu = null">复制文字</button>
+        <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制便签</button>
         <button @click="bringSelectionToFront(contextMenu!.noteId!); contextMenu = null">
           {{ noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.pinned ? "取消置顶" : "置顶" }}
         </button>

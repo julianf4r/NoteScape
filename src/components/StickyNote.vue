@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Pin, Plus, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Minus, Pin, Plus, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
 import { EditorContent, type JSONContent, useEditor } from "@tiptap/vue-3";
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -10,7 +10,10 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
 import type { StickyNote, TagItem } from "../types";
+import { useFeedbackStore } from "../stores/feedbackStore";
 import { noteColors } from "../utils/colors";
+
+const feedback = useFeedbackStore();
 
 const props = defineProps<{
   note: StickyNote;
@@ -31,6 +34,7 @@ const emit = defineEmits<{
   live: [patch: Partial<StickyNote>];
   delete: [];
   duplicate: [];
+  copyText: [];
   front: [];
   context: [event: MouseEvent];
   editingDone: [];
@@ -194,6 +198,24 @@ function setFontSize(event: Event) {
   if (Number.isFinite(value)) emit("update", { fontSize: Math.min(32, Math.max(12, value)) }, true);
 }
 
+async function copySelectedText() {
+  const richEditor = editor.value;
+  const text = richEditor ? richEditor.state.doc.textBetween(richEditor.state.selection.from, richEditor.state.selection.to, "\n") : "";
+  if (!text) return;
+  await navigator.clipboard.writeText(text);
+  feedback.notify("文字已复制", "success");
+}
+
+function onContextMenu(event: MouseEvent) {
+  if (props.editing && (event.target as HTMLElement).closest(".tiptap")) {
+    event.stopPropagation();
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  emit("context", event);
+}
+
 function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: boolean; state: { selection: { empty: boolean } } } }) {
   return props.editing && currentEditor.isEditable && !currentEditor.state.selection.empty;
 }
@@ -206,7 +228,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
     :style="style"
     @mousedown.left="startDrag"
     @dblclick.stop="emit('edit')"
-    @contextmenu.prevent.stop="emit('context', $event)"
+    @contextmenu="onContextMenu"
   >
     <div v-if="decoration === 'pin'" class="pin"><Pin :size="22" /></div>
     <div v-if="decoration === 'tape'" class="tape"></div>
@@ -226,6 +248,8 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
         <span></span>
         <button title="左对齐" :class="{ active: editor.isActive({ textAlign: 'left' }) }" @click.prevent.stop="editor.chain().focus().setTextAlign('left').run()"><AlignLeft :size="15" /></button>
         <button title="居中" :class="{ active: editor.isActive({ textAlign: 'center' }) }" @click.prevent.stop="editor.chain().focus().setTextAlign('center').run()"><AlignCenter :size="15" /></button>
+        <span></span>
+        <button title="复制选中文字" @click.prevent.stop="copySelectedText"><Copy :size="15" /></button>
       </BubbleMenu>
       <EditorContent class="editor-content" :editor="editor" @mousedown.stop @keydown.esc.capture.prevent.stop="saveEdit" />
     </template>
@@ -243,7 +267,8 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
       <button title="增大字号" @click="changeFontSize(1)"><Plus :size="14" /></button>
       <button :title="frontTitle" :class="{ active: props.note.pinned }" @click="emit('front')"><ChevronsUp :size="15" /></button>
       <button title="标签" :class="{ active: showTags }" @click="showTags = !showTags"><Tags :size="15" /></button>
-      <button title="复制" @click="emit('duplicate')"><Copy :size="15" /></button>
+      <button title="复制文字" @click="emit('copyText')"><FileText :size="15" /></button>
+      <button title="复制便签" @click="emit('duplicate')"><Copy :size="15" /></button>
       <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>
     </div>
 
@@ -383,7 +408,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  width: 240px;
+  width: 270px;
   padding: 5px;
   background: #fff;
   border: 1px solid #e5e7eb;

@@ -20,9 +20,16 @@ const feedbackStore = useFeedbackStore();
 
 const noteTags = computed(() => noteStore.notes.flatMap((note) => note.tags));
 
+function isTextInputTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest(".tiptap, input, textarea, select, [contenteditable='true']"));
+}
+
 function onKeydown(event: KeyboardEvent) {
   const selected = noteStore.selectedIds[0];
   const isEditing = Boolean(noteStore.editingId);
+  const textInputTarget = isTextInputTarget(event.target);
+  if (textInputTarget && !(event.ctrlKey && event.key.toLowerCase() === "s") && event.key !== "Escape") return;
   if (event.ctrlKey && event.key.toLowerCase() === "f") {
     event.preventDefault();
     window.dispatchEvent(new CustomEvent("focus-search"));
