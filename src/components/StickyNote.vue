@@ -108,6 +108,9 @@ const style = computed(() => ({
   zIndex: (props.note.pinned ? 100000 : 0) + props.note.zIndex,
   backgroundColor: noteColors[props.note.color],
   transform: `rotate(${props.note.rotation}deg)`,
+}));
+
+const contentStyle = computed(() => ({
   fontSize: `${props.note.fontSize}px`,
   fontWeight: props.note.fontWeight === "medium" ? 500 : props.note.fontWeight,
   textAlign: props.note.textAlign,
@@ -266,9 +269,9 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
         <span></span>
         <button title="复制选中文字" @click.prevent.stop="copySelectedText"><Copy :size="15" /></button>
       </BubbleMenu>
-      <EditorContent class="editor-content" :editor="editor" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
+      <EditorContent class="editor-content" :editor="editor" :style="contentStyle" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
     </template>
-    <div v-else class="content">
+    <div v-else class="content" :style="contentStyle">
       <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
         <mark v-if="part.match">{{ part.text }}</mark>
         <template v-else>{{ part.text }}</template>
@@ -531,6 +534,11 @@ mark {
   border-radius: 9px;
   box-shadow: var(--shadow-md);
   transform: translateX(-50%);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: left;
 }
 
 .tag-panel button {
