@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { Hand, Minus, Plus, RotateCcw, RotateCw, Settings2, SlidersHorizontal, StickyNote } from "lucide-vue-next";
+import { computed, ref } from "vue";
+import { ChevronDown, Hand, Minus, Plus, RotateCcw, RotateCw, SlidersHorizontal, StickyNote } from "lucide-vue-next";
 
-defineProps<{
+const props = defineProps<{
   scale: number;
   handActive: boolean;
 }>();
@@ -19,6 +20,13 @@ const emit = defineEmits<{
 }>();
 
 const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
+const zoomOpen = ref(false);
+const zoomLabel = computed(() => `${Math.round(props.scale * 100)}%`);
+
+function selectZoom(scale: number) {
+  emit("setZoom", scale);
+  zoomOpen.value = false;
+}
 </script>
 
 <template>
@@ -30,13 +38,25 @@ const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
     <button title="新建便签" @click="emit('add')"><StickyNote :size="20" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>
-    <select class="zoom" title="缩放比例" :value="scale" @change="emit('setZoom', Number(($event.target as HTMLSelectElement).value))">
-      <option v-for="option in zoomOptions" :key="option" :value="option">{{ Math.round(option * 100) }}%</option>
-    </select>
+    <div class="zoom-menu" @mousedown.stop @mouseleave="zoomOpen = false">
+      <button class="zoom-trigger" title="缩放比例" @click="zoomOpen = !zoomOpen">
+        <span>{{ zoomLabel }}</span>
+        <ChevronDown :size="15" />
+      </button>
+      <div v-if="zoomOpen" class="zoom-options">
+        <button
+          v-for="option in zoomOptions"
+          :key="option"
+          :class="{ active: Math.round(scale * 100) === Math.round(option * 100) }"
+          @click="selectZoom(option)"
+        >
+          {{ Math.round(option * 100) }}%
+        </button>
+      </div>
+    </div>
     <button title="放大" @click="emit('zoomIn')"><Plus :size="18" /></button>
     <span></span>
     <button title="设置" @click="emit('settings')"><SlidersHorizontal :size="20" /></button>
-    <button title="显示设置" @click="emit('settings')"><Settings2 :size="19" /></button>
   </div>
 </template>
 
@@ -49,7 +69,7 @@ const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
   display: flex;
   align-items: center;
   height: 50px;
-  overflow: hidden;
+  overflow: visible;
   background: rgba(255, 255, 255, 0.96);
   border: 1px solid #eceff3;
   border-radius: 10px;
@@ -77,15 +97,46 @@ span {
   background: #eeeeee;
 }
 
-.zoom {
-  width: 72px;
-  height: 50px;
-  padding: 0 4px;
-  color: #374151;
-  text-align: center;
-  border: 0;
-  outline: 0;
-  background: transparent;
+.zoom-menu {
+  position: relative;
+}
+
+.zoom-trigger {
+  width: 78px;
+  gap: 5px;
   font-weight: 600;
+}
+
+.zoom-trigger span {
+  width: auto;
+  height: auto;
+  background: transparent;
+}
+
+.zoom-options {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 50;
+  width: 88px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+}
+
+.zoom-options button {
+  width: 100%;
+  height: 30px;
+  justify-content: center;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.zoom-options button.active {
+  color: #1d4ed8;
+  background: #e8f1ff;
 }
 </style>
