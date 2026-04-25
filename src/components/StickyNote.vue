@@ -45,6 +45,8 @@ const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
+const heightLimited = ref(false);
+const limitNoticeShown = ref(false);
 const decoration = computed(() => props.note.decoration ?? "none");
 const frontTitle = computed(() => (props.note.pinned ? "取消置顶" : "置顶"));
 const maxNoteHeight = 1000;
@@ -71,11 +73,16 @@ const editor = useEditor({
     Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
   ],
   editorProps: {
+    handleTextInput: () => blockLimitedEditorInput(),
+    handlePaste: () => blockLimitedEditorInput(),
     handleDOMEvents: {
       blur: () => {
         if (props.editing) saveEdit();
         return false;
       },
+      keydown: (_view, event) => blockLimitedInput(event as KeyboardEvent),
+      beforeinput: (_view, event) => blockLimitedBeforeInput(event as InputEvent),
+      paste: (_view, event) => blockLimitedPaste(event as ClipboardEvent),
     },
   },
   onUpdate: ({ editor }) => {
@@ -120,7 +127,7 @@ const contentStyle = computed(() => ({
 
 const editorStyle = computed(() => ({
   ...contentStyle.value,
-  overflowY: props.note.height >= maxNoteHeight ? "auto" : "hidden",
+  overflowY: "hidden",
 }));
 
 watch(
@@ -227,9 +234,77 @@ function autoGrowToContent() {
   const editorWrapper = editorElement?.parentElement;
   if (!props.editing || !editorElement || !editorWrapper) return;
   const overflow = editorElement.scrollHeight - editorWrapper.clientHeight;
+  heightLimited.value = measureHeightLimited();
+  if (!heightLimited.value) limitNoticeShown.value = false;
   if (overflow <= 1) return;
   const desiredHeight = Math.min(maxNoteHeight, Math.ceil(props.note.height + overflow + 8));
   if (desiredHeight > props.note.height + 1) emit("live", { height: desiredHeight });
+  if (desiredHeight >= maxNoteHeight) heightLimited.value = true;
+}
+
+function blockLimitedInput(event: KeyboardEvent) {
+  if (!props.editing || event.isComposing || !isTextInputKey(event) || !isHeightLimited()) return false;
+  event.preventDefault();
+  notifyHeightLimited();
+  return true;
+}
+
+function blockLimitedBeforeInput(event: InputEvent) {
+  if (!props.editing || !isInsertInput(event) || !isHeightLimited()) return false;
+  event.preventDefault();
+  notifyHeightLimited();
+  return true;
+}
+
+function blockLimitedPaste(event: ClipboardEvent) {
+  if (!props.editing || !isHeightLimited()) return false;
+  event.preventDefault();
+  notifyHeightLimited();
+  return true;
+}
+
+function blockLimitedEditorInput() {
+  if (!props.editing || !isHeightLimited()) return false;
+  notifyHeightLimited();
+  return true;
+}
+
+function isTextInputKey(event: KeyboardEvent) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return false;
+  return event.key.length === 1 || event.key === "Enter" || event.key === "Tab";
+}
+
+function isInsertInput(event: InputEvent) {
+  return (
+    event.inputType === "insertText" ||
+    event.inputType === "insertCompositionText" ||
+    event.inputType === "insertParagraph" ||
+    event.inputType === "insertLineBreak" ||
+    event.inputType === "insertFromPaste"
+  );
+}
+
+function isHeightLimited() {
+  heightLimited.value = measureHeightLimited();
+  if (!heightLimited.value) limitNoticeShown.value = false;
+  return heightLimited.value;
+}
+
+function measureHeightLimited() {
+  const editorElement = editor.value?.view.dom;
+  const editorWrapper = editorElement?.parentElement;
+  if (!editorElement || !editorWrapper || props.note.height < maxNoteHeight) return false;
+  const contentBottom = Array.from(editorElement.children).reduce((bottom, child) => {
+    const element = child as HTMLElement;
+    return Math.max(bottom, element.offsetTop + element.offsetHeight);
+  }, 0);
+  return editorWrapper.clientHeight - contentBottom <= 8;
+}
+
+function notifyHeightLimited() {
+  if (limitNoticeShown.value) return;
+  limitNoticeShown.value = true;
+  feedback.notify("便签已达到最大高度");
 }
 
 async function copySelectedText() {
