@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Palette, Pin, Plus, Tags, Trash2 } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Palette, Pin, Plus, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
 import { EditorContent, type JSONContent, useEditor } from "@tiptap/vue-3";
+import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
@@ -196,6 +197,10 @@ function setFontSize(event: Event) {
   const value = Number((event.target as HTMLInputElement).value);
   if (Number.isFinite(value)) emit("update", { fontSize: Math.min(32, Math.max(12, value)) }, true);
 }
+
+function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: boolean; state: { selection: { empty: boolean } } } }) {
+  return props.editing && currentEditor.isEditable && !currentEditor.state.selection.empty;
+}
 </script>
 
 <template>
@@ -210,7 +215,24 @@ function setFontSize(event: Event) {
     <div v-if="decoration === 'pin'" class="pin"><Pin :size="22" /></div>
     <div v-if="decoration === 'tape'" class="tape"></div>
 
-    <EditorContent v-if="props.editing" class="editor-content" :editor="editor" @mousedown.stop @keydown.esc.capture.prevent.stop="saveEdit" />
+    <template v-if="props.editing">
+      <BubbleMenu
+        v-if="editor"
+        :editor="editor"
+        :should-show="shouldShowTextMenu"
+        :options="{ placement: 'top', offset: 8 }"
+        class="text-menu"
+        @mousedown.prevent.stop
+        @dblclick.prevent.stop
+      >
+        <button title="加粗" :class="{ active: editor.isActive('bold') }" @click.prevent.stop="editor.chain().focus().toggleBold().run()"><Bold :size="15" /></button>
+        <button title="删除线" :class="{ active: editor.isActive('strike') }" @click.prevent.stop="editor.chain().focus().toggleStrike().run()"><Strikethrough :size="15" /></button>
+        <span></span>
+        <button title="左对齐" :class="{ active: editor.isActive({ textAlign: 'left' }) }" @click.prevent.stop="editor.chain().focus().setTextAlign('left').run()"><AlignLeft :size="15" /></button>
+        <button title="居中" :class="{ active: editor.isActive({ textAlign: 'center' }) }" @click.prevent.stop="editor.chain().focus().setTextAlign('center').run()"><AlignCenter :size="15" /></button>
+      </BubbleMenu>
+      <EditorContent class="editor-content" :editor="editor" @mousedown.stop @keydown.esc.capture.prevent.stop="saveEdit" />
+    </template>
     <div v-else class="content">
       <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
         <mark v-if="part.match">{{ part.text }}</mark>
@@ -219,7 +241,7 @@ function setFontSize(event: Event) {
       <EditorContent v-else class="editor-content readonly" :editor="editor" />
     </div>
 
-    <div v-if="props.selected && !props.editing" class="note-actions">
+    <div v-if="props.selected && !props.editing" class="note-actions" @mousedown.stop @dblclick.prevent.stop>
       <button title="颜色"><Palette :size="15" /></button>
       <span class="swatches">
         <button v-for="color in noteColorList" :key="color" class="swatch" :style="{ backgroundColor: noteColors[color] }" @click="changeColor(color)"></button>
@@ -227,9 +249,6 @@ function setFontSize(event: Event) {
       <button title="减小字号" @click="changeFontSize(-1)"><Minus :size="14" /></button>
       <input class="font-input" type="number" min="12" max="32" :value="props.note.fontSize" @change="setFontSize" />
       <button title="增大字号" @click="changeFontSize(1)"><Plus :size="14" /></button>
-      <button title="加粗" @click="emit('update', { fontWeight: props.note.fontWeight === 'bold' ? 'normal' : 'bold' }, true)"><Bold :size="15" /></button>
-      <button title="左对齐" :class="{ active: props.note.textAlign === 'left' }" @click="emit('update', { textAlign: 'left' }, true)"><AlignLeft :size="15" /></button>
-      <button title="居中" :class="{ active: props.note.textAlign === 'center' }" @click="emit('update', { textAlign: 'center' }, true)"><AlignCenter :size="15" /></button>
       <button :title="frontTitle" :class="{ active: props.note.pinned }" @click="emit('front')"><ChevronsUp :size="15" /></button>
       <button title="标签" :class="{ active: showTags }" @click="showTags = !showTags"><Tags :size="15" /></button>
       <button title="复制" @click="emit('duplicate')"><Copy :size="15" /></button>
@@ -315,6 +334,7 @@ mark {
   color: inherit;
   font-family: "Segoe Print", "Comic Sans MS", "Microsoft YaHei", cursive;
   font-size: inherit;
+  font-synthesis: weight;
 }
 
 .editor-content :deep(.tiptap) {
@@ -371,13 +391,15 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  max-width: 360px;
+  width: 330px;
   padding: 5px;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 9px;
   box-shadow: var(--shadow-md);
   transform: translateX(-50%);
+  font-size: 13px;
+  line-height: 1;
 }
 
 .note-actions button {
@@ -389,13 +411,15 @@ mark {
   color: #374151;
   background: transparent;
   border-radius: 6px;
+  font-size: 13px;
 }
 
 .note-actions button:hover {
   background: #f1f5f9;
 }
 
-.note-actions button.active {
+.note-actions button.active,
+.text-menu button.active {
   color: #1d4ed8;
   background: #e8f1ff;
 }
@@ -420,11 +444,50 @@ mark {
   height: 26px;
   padding: 0 3px;
   color: #374151;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   text-align: center;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
   outline: 0;
   background: #fff;
+}
+
+.text-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  box-shadow: var(--shadow-md);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.text-menu button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #374151;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.text-menu button:hover {
+  background: #f1f5f9;
+}
+
+.text-menu span {
+  width: 1px;
+  height: 18px;
+  background: #e5e7eb;
 }
 
 .resize-handle {
