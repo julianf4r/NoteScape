@@ -10,7 +10,6 @@ import { backupDatabase, exportJsonFile, importJsonFile } from "../utils/storage
 const appStore = useAppStore();
 const feedback = useFeedbackStore();
 const settingsStore = useSettingsStore();
-const exported = ref("");
 const dbMessage = ref("");
 const dataMessage = ref("");
 
@@ -177,7 +176,6 @@ async function backupCurrentDatabase() {
           <button :disabled="!appStore.databaseReady" @click="exportData"><Download :size="16" />导出数据</button>
           <button :disabled="!appStore.databaseReady" @click="importFromFile"><Upload :size="16" />导入文件</button>
         </div>
-        <textarea v-if="exported" v-model="exported" readonly></textarea>
         <p v-if="dataMessage" class="hint">{{ dataMessage }}</p>
       </section>
     </aside>
@@ -261,8 +259,7 @@ label {
 }
 
 select,
-input[type="number"],
-textarea {
+input[type="number"] {
   width: 100%;
   border: 1px solid #dfe3ea;
   border-radius: 7px;
@@ -314,20 +311,6 @@ input[type="number"] {
 }
 
 .actions button:disabled {
-  cursor: not-allowed;
-  color: #9ca3af;
-  background: #f3f4f6;
-}
-
-textarea {
-  min-height: 92px;
-  margin-top: 8px;
-  padding: 9px;
-  resize: vertical;
-  font-size: 12px;
-}
-
-textarea:disabled {
   cursor: not-allowed;
   color: #9ca3af;
   background: #f3f4f6;

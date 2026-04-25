@@ -1,45 +1,10 @@
-import type { AppData, AppSettings, CanvasItem, NoteColor, StickyNote, TagItem } from "../types";
+import type { AppData, AppSettings, CanvasItem, StickyNote, TagItem } from "../types";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface DatabaseLoadResult {
   data: string;
   db_path: string;
 }
-
-const now = () => new Date().toISOString();
-
-const baseNote = (
-  id: string,
-  content: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  color: NoteColor,
-  rotation: number,
-  zIndex: number,
-  tags: string[] = [],
-  fontSize = 19,
-): StickyNote => ({
-  id,
-  canvasId: "canvas-default",
-  content,
-  x,
-  y,
-  width,
-  height,
-  color,
-  rotation,
-  zIndex,
-  pinned: false,
-  tags,
-  fontSize,
-  fontWeight: "normal",
-  textAlign: "left",
-  decoration: "tape",
-  createdAt: now(),
-  updatedAt: now(),
-});
 
 export const defaultSettings: AppSettings = {
   theme: "light",
@@ -50,47 +15,20 @@ export const defaultSettings: AppSettings = {
   autoSave: true,
 };
 
-export function createDefaultData(): AppData {
-  const createdAt = now();
-  return {
-    version: 1,
-    canvases: [
-      {
-        id: "canvas-default",
-        name: "默认画布",
-        createdAt,
-        updatedAt: createdAt,
-        deletedAt: null,
-      },
-    ],
-    tags: [],
-    settings: defaultSettings,
-    notes: [baseNote("note-default", "", 360, 260, 260, 220, "yellow", -1.5, 1, [], defaultSettings.defaultFontSize)],
-  };
-}
-
 export function parseData(raw: string): AppData {
-  try {
-    const parsed = JSON.parse(raw) as AppData;
-    if (!parsed.version || !Array.isArray(parsed.canvases) || !Array.isArray(parsed.notes)) {
-      throw new Error("Invalid app data");
-    }
-    return parsed;
-  } catch {
-    return createDefaultData();
+  const parsed = JSON.parse(raw) as AppData;
+  if (!parsed.version || !Array.isArray(parsed.canvases) || !Array.isArray(parsed.notes)) {
+    throw new Error("数据格式不正确");
   }
+  return parsed;
 }
 
 export async function loadData(): Promise<DatabaseLoadResult> {
-  return invoke<DatabaseLoadResult>("load_app_data", {
-    defaultData: JSON.stringify(createDefaultData()),
-  });
+  return invoke<DatabaseLoadResult>("load_app_data");
 }
 
 export async function resetDatabaseToDefault(): Promise<DatabaseLoadResult> {
-  return invoke<DatabaseLoadResult>("reset_database_to_default", {
-    defaultData: JSON.stringify(createDefaultData()),
-  });
+  return invoke<DatabaseLoadResult>("reset_database_to_default");
 }
 
 export async function saveData(data: AppData) {
@@ -168,7 +106,6 @@ export async function switchDatabase(dbPath: string): Promise<DatabaseLoadResult
 export async function createDatabase(dbPath: string): Promise<DatabaseLoadResult> {
   return invoke<DatabaseLoadResult>("create_database", {
     dbPath,
-    initialData: JSON.stringify(createDefaultData()),
   });
 }
 

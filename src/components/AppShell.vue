@@ -87,7 +87,7 @@ function onPersistenceError(event: Event) {
 watch(
   noteTags,
   (tags) => {
-    if (appStore.loaded) tagStore.recalculateCounts(tags);
+    if (appStore.databaseReady) tagStore.recalculateCounts(tags);
   },
   { immediate: true },
 );

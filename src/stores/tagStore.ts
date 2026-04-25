@@ -54,7 +54,6 @@ export const useTagStore = defineStore("tag", {
     recalculateCounts(noteTags: string[]) {
       this.tags.forEach((tag) => {
         tag.count = noteTags.filter((id) => id === tag.id).length;
-        void saveTagData(tag).catch((error) => reportPersistenceError("保存标签", error));
       });
     },
   },

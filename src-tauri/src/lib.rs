@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 const PREF_FILE: &str = "database-path.txt";
 
@@ -100,6 +101,64 @@ struct AppSettings {
 
 fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|error| error.to_string())
+}
+
+fn now_iso() -> String {
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| "1970-01-01T00:00:00Z".to_string())
+}
+
+fn default_app_data() -> AppData {
+    let created_at = now_iso();
+    AppData {
+        version: 1,
+        canvases: vec![CanvasItem {
+            id: "canvas-default".to_string(),
+            name: "默认画布".to_string(),
+            description: None,
+            created_at: created_at.clone(),
+            updated_at: created_at.clone(),
+            deleted_at: None,
+            viewport: None,
+        }],
+        notes: vec![StickyNote {
+            id: "note-default".to_string(),
+            canvas_id: "canvas-default".to_string(),
+            title: None,
+            content: String::new(),
+            content_json: None,
+            x: 360.0,
+            y: 260.0,
+            width: 260.0,
+            height: 220.0,
+            color: "yellow".to_string(),
+            rotation: -1.5,
+            z_index: 1,
+            pinned: false,
+            tags: Vec::new(),
+            font_size: 18.0,
+            font_weight: "normal".to_string(),
+            text_align: "left".to_string(),
+            decoration: Some("tape".to_string()),
+            checked_items: None,
+            created_at: created_at.clone(),
+            updated_at: created_at,
+        }],
+        tags: Vec::new(),
+        settings: AppSettings {
+            theme: "light".to_string(),
+            default_font_size: 18.0,
+            show_grid: true,
+            random_rotation: true,
+            note_shadow: true,
+            auto_save: true,
+        },
+    }
+}
+
+fn default_app_data_json() -> Result<String, String> {
+    serde_json::to_string(&default_app_data()).map_err(|error| error.to_string())
 }
 
 fn app_config_dir(app: &AppHandle) -> Result<PathBuf, String> {
@@ -340,7 +399,7 @@ fn save_structured_data(conn: &mut Connection, app_data: &AppData) -> Result<(),
     for tag in &app_data.tags {
         tx.execute(
             "INSERT INTO tags (id, name, color, count, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![tag.id, tag.name, tag.color, tag.count, tag.created_at],
+            params![tag.id, tag.name, tag.color, 0, tag.created_at],
         )
         .map_err(|error| error.to_string())?;
     }
@@ -432,9 +491,8 @@ fn upsert_tag(conn: &Connection, tag: &TagItem) -> Result<(), String> {
          VALUES (?1, ?2, ?3, ?4, ?5)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
-            color = excluded.color,
-            count = excluded.count",
-        params![tag.id, tag.name, tag.color, tag.count, tag.created_at],
+            color = excluded.color",
+        params![tag.id, tag.name, tag.color, 0, tag.created_at],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
@@ -572,10 +630,13 @@ fn load_structured_data(conn: &Connection) -> Result<AppData, String> {
     })
 }
 
-fn load_or_seed(path: &Path, fallback_data: &str) -> Result<String, String> {
+fn load_or_seed(path: &Path) -> Result<String, String> {
     let mut conn = open_database(path)?;
     if is_database_empty(&conn)? {
-        let seed_data = legacy_app_state_data(&conn)?.unwrap_or_else(|| fallback_data.to_string());
+        let seed_data = match legacy_app_state_data(&conn)? {
+            Some(data) => data,
+            None => default_app_data_json()?,
+        };
         let seed = parse_app_data(&seed_data)?;
         save_structured_data(&mut conn, &seed)?;
     }
@@ -692,7 +753,13 @@ fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
 
 fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
     let mut statement = conn
-        .prepare("SELECT id, name, color, count, created_at FROM tags ORDER BY created_at ASC")
+        .prepare(
+            "SELECT tags.id, tags.name, tags.color, COUNT(note_tags.note_id), tags.created_at
+             FROM tags
+             LEFT JOIN note_tags ON note_tags.tag_id = tags.id
+             GROUP BY tags.id, tags.name, tags.color, tags.created_at
+             ORDER BY tags.created_at ASC",
+        )
         .map_err(|error| error.to_string())?;
     let rows = statement
         .query_map([], |row| {
@@ -790,7 +857,7 @@ fn load_checklist_items(
 }
 
 #[tauri::command]
-fn load_app_data(app: AppHandle, default_data: String) -> Result<DatabaseLoadResult, String> {
+fn load_app_data(app: AppHandle) -> Result<DatabaseLoadResult, String> {
     let db_path = read_database_path(&app)?;
     let default_path = default_db_path(&app)?;
     if !db_path.exists() && db_path != default_path {
@@ -802,7 +869,7 @@ fn load_app_data(app: AppHandle, default_data: String) -> Result<DatabaseLoadRes
     if !db_path.exists() {
         write_database_path(&app, &db_path)?;
     }
-    let data = load_or_seed(&db_path, &default_data)?;
+    let data = load_or_seed(&db_path)?;
     Ok(DatabaseLoadResult {
         data,
         db_path: db_path.to_string_lossy().to_string(),
@@ -810,12 +877,9 @@ fn load_app_data(app: AppHandle, default_data: String) -> Result<DatabaseLoadRes
 }
 
 #[tauri::command]
-fn reset_database_to_default(
-    app: AppHandle,
-    default_data: String,
-) -> Result<DatabaseLoadResult, String> {
+fn reset_database_to_default(app: AppHandle) -> Result<DatabaseLoadResult, String> {
     let db_path = default_db_path(&app)?;
-    let data = load_or_seed(&db_path, &default_data)?;
+    let data = load_or_seed(&db_path)?;
     write_database_path(&app, &db_path)?;
     Ok(DatabaseLoadResult {
         data,
@@ -958,11 +1022,10 @@ fn set_database_path(
 fn create_database(
     app: AppHandle,
     db_path: String,
-    initial_data: String,
 ) -> Result<DatabaseLoadResult, String> {
     let path = PathBuf::from(db_path);
     let mut conn = open_database(&path)?;
-    let app_data = parse_app_data(&initial_data)?;
+    let app_data = default_app_data();
     save_structured_data(&mut conn, &app_data)?;
     let data = serde_json::to_string(&load_structured_data(&conn)?).map_err(|error| error.to_string())?;
     write_database_path(&app, &path)?;
