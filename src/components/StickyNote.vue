@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Palette, Pin, Plus, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, Minus, Pin, Plus, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
 import { EditorContent, type JSONContent, useEditor } from "@tiptap/vue-3";
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -9,8 +9,8 @@ import TextAlign from "@tiptap/extension-text-align";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
-import type { NoteColor, StickyNote, TagItem } from "../types";
-import { noteColorList, noteColors } from "../utils/colors";
+import type { StickyNote, TagItem } from "../types";
+import { noteColors } from "../utils/colors";
 
 const props = defineProps<{
   note: StickyNote;
@@ -185,10 +185,6 @@ function saveEdit() {
   emit("editingDone");
 }
 
-function changeColor(color: NoteColor) {
-  emit("update", { color }, true);
-}
-
 function changeFontSize(delta: number) {
   emit("update", { fontSize: Math.min(32, Math.max(12, props.note.fontSize + delta)) }, true);
 }
@@ -242,10 +238,6 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
     </div>
 
     <div v-if="props.selected && !props.editing" class="note-actions" @mousedown.stop @dblclick.prevent.stop>
-      <button title="颜色"><Palette :size="15" /></button>
-      <span class="swatches">
-        <button v-for="color in noteColorList" :key="color" class="swatch" :style="{ backgroundColor: noteColors[color] }" @click="changeColor(color)"></button>
-      </span>
       <button title="减小字号" @click="changeFontSize(-1)"><Minus :size="14" /></button>
       <input class="font-input" type="number" min="12" max="32" :value="props.note.fontSize" @change="setFontSize" />
       <button title="增大字号" @click="changeFontSize(1)"><Plus :size="14" /></button>
@@ -391,7 +383,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  width: 330px;
+  width: 240px;
   padding: 5px;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -422,21 +414,6 @@ mark {
 .text-menu button.active {
   color: #1d4ed8;
   background: #e8f1ff;
-}
-
-.note-actions .swatch {
-  width: 18px;
-  height: 18px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 50%;
-}
-
-.swatches {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding-right: 3px;
-  border-right: 1px solid #eef1f4;
 }
 
 .font-input {

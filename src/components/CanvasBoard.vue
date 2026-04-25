@@ -506,12 +506,6 @@ watch(
             ></button>
           </div>
         </div>
-        <div class="context-section">
-          <span>标签</span>
-          <button v-for="tag in tagStore.tags" :key="tag.id" @click="toggleTagForSelection(contextMenu!.noteId!, tag.id); contextMenu = null">
-            {{ tag.name }}
-          </button>
-        </div>
       </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
