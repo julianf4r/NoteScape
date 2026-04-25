@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import { Download, Upload, X } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../stores/appStore";
@@ -10,15 +10,13 @@ import { backupDatabase, exportJsonFile, importJsonFile } from "../utils/storage
 const appStore = useAppStore();
 const feedback = useFeedbackStore();
 const settingsStore = useSettingsStore();
-const dbMessage = ref("");
-const dataMessage = ref("");
 
 const settings = computed(() => settingsStore.settings);
 
 async function exportData() {
   if (!appStore.databaseReady) {
-    dataMessage.value = appStore.loadError || "数据库未加载";
-    feedback.notify(`导出失败：${dataMessage.value}`, "error");
+    const message = appStore.loadError || "数据库未加载";
+    feedback.notify(`导出失败：${message}`, "error");
     return;
   }
   const selected = await save({
@@ -28,18 +26,17 @@ async function exportData() {
   if (!selected) return;
   try {
     await exportJsonFile(selected, appStore.exportData());
-    dataMessage.value = "数据已导出";
-    feedback.notify(dataMessage.value, "success");
+    feedback.notify("数据已导出", "success");
   } catch (error) {
-    dataMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`导出失败：${dataMessage.value}`, "error");
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.notify(`导出失败：${message}`, "error");
   }
 }
 
 async function importFromFile() {
   if (!appStore.databaseReady) {
-    dataMessage.value = appStore.loadError || "数据库未加载";
-    feedback.notify(`导入失败：${dataMessage.value}`, "error");
+    const message = appStore.loadError || "数据库未加载";
+    feedback.notify(`导入失败：${message}`, "error");
     return;
   }
   const selected = await open({
@@ -50,11 +47,10 @@ async function importFromFile() {
   if (typeof selected !== "string") return;
   try {
     await appStore.importData(await importJsonFile(selected));
-    dataMessage.value = "数据已导入";
-    feedback.notify(dataMessage.value, "success");
+    feedback.notify("数据已导入", "success");
   } catch (error) {
-    dataMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`导入失败：${dataMessage.value}`, "error");
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.notify(`导入失败：${message}`, "error");
   }
 }
 
@@ -67,11 +63,10 @@ async function chooseDatabase() {
   if (typeof selected !== "string") return;
   try {
     await appStore.changeDatabase(selected);
-    dbMessage.value = "已切换数据库文件";
-    feedback.notify(dbMessage.value, "success");
+    feedback.notify("已切换数据库文件", "success");
   } catch (error) {
-    dbMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`切换数据库失败：${dbMessage.value}`, "error");
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.notify(`切换数据库失败：${message}`, "error");
   }
 }
 
@@ -83,22 +78,20 @@ async function createDatabase() {
   if (!selected) return;
   try {
     await appStore.createDatabase(selected);
-    dbMessage.value = "已创建并切换数据库文件";
-    feedback.notify(dbMessage.value, "success");
+    feedback.notify("已创建并切换数据库文件", "success");
   } catch (error) {
-    dbMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`创建数据库失败：${dbMessage.value}`, "error");
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.notify(`创建数据库失败：${message}`, "error");
   }
 }
 
 async function useDefaultDatabase() {
   try {
     await appStore.useDefaultDatabase();
-    dbMessage.value = "已回退到默认数据库";
-    feedback.notify(dbMessage.value, "success");
+    feedback.notify("已回退到默认数据库", "success");
   } catch (error) {
-    dbMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`回退默认数据库失败：${dbMessage.value}`, "error");
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.notify(`回退默认数据库失败：${message}`, "error");
   }
 }
 
@@ -110,11 +103,10 @@ async function backupCurrentDatabase() {
   if (!selected) return;
   try {
     await backupDatabase(selected);
-    dbMessage.value = "数据库已备份";
-    feedback.notify(dbMessage.value, "success");
+    feedback.notify("数据库已备份", "success");
   } catch (error) {
-    dbMessage.value = error instanceof Error ? error.message : String(error);
-    feedback.notify(`备份数据库失败：${dbMessage.value}`, "error");
+    const message = error instanceof Error ? error.message : String(error);
+    feedback.notify(`备份数据库失败：${message}`, "error");
   }
 }
 
@@ -167,7 +159,6 @@ async function backupCurrentDatabase() {
           <button @click="useDefaultDatabase">默认</button>
           <button :disabled="!appStore.databaseReady" @click="backupCurrentDatabase">备份</button>
         </div>
-        <p v-if="dbMessage" class="hint">{{ dbMessage }}</p>
       </section>
 
       <section>
@@ -176,7 +167,6 @@ async function backupCurrentDatabase() {
           <button :disabled="!appStore.databaseReady" @click="exportData"><Download :size="16" />导出数据</button>
           <button :disabled="!appStore.databaseReady" @click="importFromFile"><Upload :size="16" />导入文件</button>
         </div>
-        <p v-if="dataMessage" class="hint">{{ dataMessage }}</p>
       </section>
     </aside>
   </div>
@@ -327,12 +317,6 @@ input[type="number"] {
   font-size: 12px;
   line-height: 1.45;
   margin-bottom: 10px;
-}
-
-.hint {
-  margin: 0;
-  color: #2563eb;
-  font-size: 13px;
 }
 
 .load-error {
