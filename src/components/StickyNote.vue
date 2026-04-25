@@ -109,7 +109,7 @@ const style = computed(() => ({
   height: `${props.note.height}px`,
   zIndex: (props.note.pinned ? 100000 : 0) + props.note.zIndex,
   backgroundColor: noteColors[props.note.color],
-  transform: `rotate(${props.note.rotation}deg)`,
+  transform: props.editing ? "rotate(0deg)" : `rotate(${props.note.rotation}deg)`,
 }));
 
 const contentStyle = computed(() => ({
@@ -340,6 +340,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   border-radius: 2px 2px 8px 8px;
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.14), 0 2px 4px rgba(0, 0, 0, 0.08);
   transform-origin: center center;
+  transition: transform 0.12s ease;
   cursor: move;
   user-select: none;
 }
