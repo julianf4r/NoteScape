@@ -47,6 +47,7 @@ const draft = ref(props.note.content);
 const showTags = ref(false);
 const decoration = computed(() => props.note.decoration ?? "none");
 const frontTitle = computed(() => (props.note.pinned ? "取消置顶" : "置顶"));
+const maxNoteHeight = 1000;
 
 function textToDoc(text: string): JSONContent {
   return {
@@ -79,6 +80,7 @@ const editor = useEditor({
   },
   onUpdate: ({ editor }) => {
     draft.value = editor.getText();
+    scheduleAutoGrow();
   },
 });
 
@@ -116,6 +118,11 @@ const contentStyle = computed(() => ({
   textAlign: props.note.textAlign,
 }));
 
+const editorStyle = computed(() => ({
+  ...contentStyle.value,
+  overflowY: props.note.height >= maxNoteHeight ? "auto" : "hidden",
+}));
+
 watch(
   () => props.editing,
   async (editing, wasEditing) => {
@@ -127,6 +134,7 @@ watch(
       draft.value = props.note.content;
       await nextTick();
       editor.value?.commands.focus("end");
+      autoGrowToContent();
     }
   },
 );
@@ -177,7 +185,7 @@ function resize(event: MouseEvent) {
   if (!resizeStart.value) return;
   emit("live", {
     width: Math.min(800, Math.max(120, resizeStart.value.before.width + (event.clientX - resizeStart.value.x) / props.scale)),
-    height: Math.min(600, Math.max(100, resizeStart.value.before.height + (event.clientY - resizeStart.value.y) / props.scale)),
+    height: Math.min(maxNoteHeight, Math.max(100, resizeStart.value.before.height + (event.clientY - resizeStart.value.y) / props.scale)),
   });
 }
 
@@ -206,6 +214,22 @@ function changeFontSize(delta: number) {
 function setFontSize(event: Event) {
   const value = Number((event.target as HTMLInputElement).value);
   if (Number.isFinite(value)) emit("update", { fontSize: Math.min(32, Math.max(12, value)) }, true);
+  scheduleAutoGrow();
+}
+
+function scheduleAutoGrow() {
+  if (!props.editing) return;
+  void nextTick(autoGrowToContent);
+}
+
+function autoGrowToContent() {
+  const editorElement = editor.value?.view.dom;
+  const editorWrapper = editorElement?.parentElement;
+  if (!props.editing || !editorElement || !editorWrapper) return;
+  const overflow = editorElement.scrollHeight - editorWrapper.clientHeight;
+  if (overflow <= 1) return;
+  const desiredHeight = Math.min(maxNoteHeight, Math.ceil(props.note.height + overflow + 8));
+  if (desiredHeight > props.note.height + 1) emit("live", { height: desiredHeight });
 }
 
 async function copySelectedText() {
@@ -269,7 +293,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
         <span></span>
         <button title="复制选中文字" @click.prevent.stop="copySelectedText"><Copy :size="15" /></button>
       </BubbleMenu>
-      <EditorContent class="editor-content" :editor="editor" :style="contentStyle" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
+      <EditorContent class="editor-content" :editor="editor" :style="editorStyle" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
     </template>
     <div v-else class="content" :style="contentStyle">
       <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
