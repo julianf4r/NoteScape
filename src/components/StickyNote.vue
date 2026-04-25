@@ -62,7 +62,7 @@ const editor = useEditor({
   content: (props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content),
   editable: props.editing,
   extensions: [
-    StarterKit,
+    StarterKit.configure({ link: false }),
     Placeholder.configure({ placeholder: "输入内容..." }),
     TextAlign.configure({ types: ["heading", "paragraph"] }),
     TaskList,
@@ -213,6 +213,14 @@ async function copySelectedText() {
   feedback.notify("文字已复制", "success");
 }
 
+function stopLinkNavigation(event: MouseEvent) {
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (!target.closest("a")) return;
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 function onContextMenu(event: MouseEvent) {
   if (props.editing && (event.target as HTMLElement).closest(".tiptap")) {
     event.stopPropagation();
@@ -258,14 +266,14 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
         <span></span>
         <button title="复制选中文字" @click.prevent.stop="copySelectedText"><Copy :size="15" /></button>
       </BubbleMenu>
-      <EditorContent class="editor-content" :editor="editor" @mousedown.stop @keydown.esc.capture.prevent.stop="saveEdit" />
+      <EditorContent class="editor-content" :editor="editor" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
     </template>
     <div v-else class="content">
       <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
         <mark v-if="part.match">{{ part.text }}</mark>
         <template v-else>{{ part.text }}</template>
       </template>
-      <EditorContent v-else class="editor-content readonly" :editor="editor" />
+      <EditorContent v-else class="editor-content readonly" :editor="editor" @click.capture="stopLinkNavigation" />
     </div>
 
     <div v-if="props.selected && !props.editing" class="note-actions" @mousedown.stop @dblclick.prevent.stop>
