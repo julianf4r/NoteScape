@@ -24,11 +24,10 @@ const tagDraft = ref("");
 const tagColorDraft = ref("#3b82f6");
 const collapsed = ref(false);
 const appVersion = packageInfo.version;
+const hasSearchQuery = computed(() => Boolean(canvasStore.searchQuery.trim()));
 
 const filteredCanvases = computed(() => {
-  const query = canvasStore.searchQuery.trim().toLowerCase();
-  if (!query) return canvasStore.activeCanvases;
-  return canvasStore.activeCanvases.filter((canvas) => canvas.name.toLowerCase().includes(query));
+  return canvasStore.activeCanvases;
 });
 
 const searchResults = computed(() => {
@@ -201,7 +200,7 @@ function selectSearchCanvas(id: string) {
     <template v-if="!collapsed">
       <SearchBox v-model="canvasStore.searchQuery" />
 
-      <section v-if="canvasStore.searchQuery.trim()" class="search-results">
+      <section v-if="hasSearchQuery" class="search-results">
       <template v-if="hasSearchResults">
         <div v-if="searchResults.canvases.length" class="result-group">
           <h3>画布</h3>
@@ -229,7 +228,7 @@ function selectSearchCanvas(id: string) {
       <div v-else class="empty small">没有匹配结果</div>
       </section>
 
-      <section class="section">
+      <section v-if="!hasSearchQuery" class="section">
       <div class="section-title">
         <span>画布</span>
         <button class="new-button" :disabled="!appStore.databaseReady" @click="createCanvas"><Plus :size="15" />新建</button>
@@ -385,7 +384,7 @@ function selectSearchCanvas(id: string) {
 }
 
 .search-results {
-  max-height: 260px;
+  max-height: calc(100vh - 150px);
   overflow: auto;
   padding: 8px;
   background: #fff;
