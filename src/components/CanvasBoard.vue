@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { X } from "lucide-vue-next";
 import CanvasToolbar from "./CanvasToolbar.vue";
 import MiniMap from "./MiniMap.vue";
 import StickyNote from "./StickyNote.vue";
@@ -36,6 +37,11 @@ let highlightTimer: number | undefined;
 const visibleNotes = computed(() =>
   noteStore.notesForCanvas(canvasStore.currentCanvasId, tagStore.activeTagId, canvasStore.searchQuery),
 );
+
+const currentCanvasNotes = computed(() => noteStore.notesForCanvas(canvasStore.currentCanvasId));
+const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.searchQuery.trim()));
+const activeTag = computed(() => tagStore.activeTag);
+const searchText = computed(() => canvasStore.searchQuery.trim());
 
 const canvasClass = computed(() => ({
   "hide-grid": !settingsStore.settings.showGrid,
@@ -162,11 +168,16 @@ function isTextInputTarget(target: EventTarget | null) {
 
 function isCanvasBlankTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
-  return !target.closest(".sticky-note, .toolbar, .minimap, .menu-popover, .empty-board");
+  return !target.closest(".sticky-note, .toolbar, .minimap, .menu-popover, .empty-board, .filter-status");
 }
 
 function isCanvasControlTarget(target: EventTarget | null) {
-  return target instanceof HTMLElement && Boolean(target.closest(".toolbar, .minimap, .menu-popover"));
+  return target instanceof HTMLElement && Boolean(target.closest(".toolbar, .minimap, .menu-popover, .filter-status"));
+}
+
+function clearFilters() {
+  tagStore.activeTagId = "";
+  canvasStore.searchQuery = "";
 }
 
 function onBoardMouseDown(event: MouseEvent) {
@@ -470,7 +481,21 @@ watch(
       <button @click.stop="settingsStore.togglePanel()">处理数据库</button>
     </div>
     <div v-else-if="!canvasStore.currentCanvasId" class="empty-board">还没有画布<br />点击“新建”开始整理你的想法</div>
+    <div v-else-if="!visibleNotes.length && filterActive" class="empty-board filtered-empty">
+      当前筛选下没有便签<br />
+      <button @click.stop="clearFilters">清除筛选</button>
+    </div>
     <div v-else-if="!visibleNotes.length" class="empty-board">双击画布空白处创建第一张便签</div>
+
+    <div v-if="appStore.databaseReady && filterActive" class="filter-status" @mousedown.stop @dblclick.stop>
+      <span v-if="activeTag" class="tag-filter">
+        <i :style="{ backgroundColor: activeTag.color }"></i>
+        {{ activeTag.name }}
+      </span>
+      <span v-if="searchText" class="search-filter">搜索：{{ searchText }}</span>
+      <b>{{ visibleNotes.length }} / {{ currentCanvasNotes.length }}</b>
+      <button title="清除筛选" @click.stop="clearFilters"><X :size="14" /></button>
+    </div>
 
     <div v-if="appStore.databaseReady" class="canvas-content" :style="{ transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})` }">
       <StickyNote
@@ -633,6 +658,84 @@ watch(
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 7px;
+}
+
+.empty-board.filtered-empty button {
+  height: 34px;
+  margin-top: 10px;
+  padding: 0 12px;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+}
+
+.filter-status {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 32;
+  min-height: 38px;
+  max-width: min(520px, calc(100% - 340px));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  color: #374151;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+  font-size: 13px;
+}
+
+.filter-status span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.filter-status .tag-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.filter-status .tag-filter i {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+}
+
+.filter-status .search-filter {
+  color: #4b5563;
+}
+
+.filter-status b {
+  flex: 0 0 auto;
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.filter-status button {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+}
+
+.filter-status button:hover {
+  color: #111827;
+  background: #eef2f7;
 }
 
 .selection-box {
