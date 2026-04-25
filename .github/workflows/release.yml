@@ -1,0 +1,118 @@
+name: NoteScape Multi-Platform Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundle_targets: msi
+            archive_suffix: windows-x64
+            built_app_path: src-tauri/target/release/NoteScape.exe
+            installer_path: src-tauri/target/release/bundle/msi/*.msi
+          - os: macos-latest
+            bundle_targets: app,dmg
+            archive_suffix: macos-arm64
+            built_app_path: src-tauri/target/release/bundle/macos/NoteScape.app
+            installer_path: src-tauri/target/release/bundle/dmg/*.dmg
+          - os: macos-15-intel
+            bundle_targets: app,dmg
+            archive_suffix: macos-x64
+            built_app_path: src-tauri/target/release/bundle/macos/NoteScape.app
+            installer_path: src-tauri/target/release/bundle/dmg/*.dmg
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      id-token: write
+      contents: write
+      attestations: write
+      artifact-metadata: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: stable
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install 7-Zip on macOS
+        if: runner.os == 'macOS'
+        run: brew install p7zip
+
+      - name: Build Tauri app
+        run: pnpm tauri build --bundles ${{ matrix.bundle_targets }}
+
+      - name: Create archive directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path release-artifacts | Out-Null
+
+      - name: Archive built app
+        shell: pwsh
+        run: |
+          $archivePath = Join-Path $PWD "release-artifacts/NoteScape-${{ github.ref_name }}-${{ matrix.archive_suffix }}.7z"
+          $sourcePath = Join-Path $PWD "${{ matrix.built_app_path }}"
+          $sourceDir = Split-Path -Path $sourcePath -Parent
+          $sourceName = Split-Path -Path $sourcePath -Leaf
+
+          Push-Location $sourceDir
+          try {
+            7z a $archivePath $sourceName
+          }
+          finally {
+            Pop-Location
+          }
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            release-artifacts/NoteScape-${{ github.ref_name }}-${{ matrix.archive_suffix }}.7z
+            ${{ matrix.installer_path }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive_suffix }}-release-assets
+          path: |
+            release-artifacts/NoteScape-${{ github.ref_name }}-${{ matrix.archive_suffix }}.7z
+            ${{ matrix.installer_path }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
