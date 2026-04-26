@@ -139,7 +139,22 @@ function rectFor(drawing: DrawingItem) {
     height="2200"
     viewBox="0 0 2800 2200"
   >
-    <g v-for="drawing in drawings" :key="drawing.id" :class="{ selected: drawingStore.selectedId === drawing.id }">
+    <defs>
+      <filter id="drawing-selection-glow" x="-80%" y="-80%" width="260%" height="260%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+        <feColorMatrix
+          in="blur"
+          type="matrix"
+          values="0 0 0 0 0.231 0 0 0 0 0.510 0 0 0 0 0.965 0 0 0 0.95 0"
+          result="blueGlow"
+        />
+        <feMerge>
+          <feMergeNode in="blueGlow" />
+        </feMerge>
+      </filter>
+    </defs>
+
+    <g v-for="drawing in drawings" :key="drawing.id" :class="{ selected: drawingStore.selectedId === drawing.id, 'arrow-drawing': drawing.type === 'arrow' }">
       <path
         v-if="drawing.type === 'pen'"
         class="drawing-stroke"
@@ -155,6 +170,32 @@ function rectFor(drawing: DrawingItem) {
         v-else-if="drawing.type === 'arrow'"
         @mousedown="selectDrawing($event, drawing.id)"
       >
+        <template v-if="drawingStore.selectedId === drawing.id">
+          <path
+            class="selection-glow"
+            :d="arrowGeometry(drawing).main"
+            :stroke-width="drawing.strokeWidth + 8"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            class="selection-glow"
+            :d="arrowGeometry(drawing).left"
+            :stroke-width="drawing.strokeWidth + 8"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+          <path
+            class="selection-glow"
+            :d="arrowGeometry(drawing).right"
+            :stroke-width="drawing.strokeWidth + 8"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </template>
         <path
           class="drawing-stroke"
           :d="arrowGeometry(drawing).main"
@@ -240,7 +281,14 @@ function rectFor(drawing: DrawingItem) {
   pointer-events: visiblePainted;
 }
 
-.drawing-layer .selected :deep(.drawing-stroke) {
+.drawing-layer :deep(.selection-glow) {
+  stroke: rgba(59, 130, 246, 0.72);
+  filter: url("#drawing-selection-glow");
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.drawing-layer .selected:not(.arrow-drawing) :deep(.drawing-stroke) {
   filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.9));
 }
 </style>

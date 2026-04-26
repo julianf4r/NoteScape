@@ -41,7 +41,7 @@ export const useDrawingStore = defineStore("drawing", {
     selectedId: "",
     tool: "select" as DrawingTool,
     color: "#ff0000",
-    strokeWidth: 12,
+    strokeWidth: 8,
     history: [] as DrawingHistoryEntry[],
     future: [] as DrawingHistoryEntry[],
   }),
