@@ -401,13 +401,13 @@ function toggleDecorationPanel() {
     @dblclick.stop="emit('edit')"
     @contextmenu="onContextMenu"
   >
-    <div v-if="decoration === 'pin'" class="pin"><Pin :size="22" /></div>
+    <div v-if="decoration === 'pin'" class="pin"><Pin :size="40" fill="currentColor"/></div>
     <div v-if="decoration === 'tape'" class="tape"></div>
     <div v-if="decoration === 'double-tape'" class="double-tape">
       <i></i>
       <i></i>
     </div>
-    <div v-if="decoration === 'paperclip'" class="paperclip"><Paperclip :size="34" /></div>
+    <div v-if="decoration === 'paperclip'" class="paperclip"><Paperclip :size="40" /></div>
     <div v-if="decoration === 'fold'" class="fold"></div>
     <div v-if="decoration === 'corner-tape'" class="corner-tape"></div>
 
@@ -931,12 +931,12 @@ mark {
 
 .pin {
   position: absolute;
-  top: -18px;
+  top: -24px;
   left: 50%;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   color: #0369a1;
   transform: translateX(-50%) rotate(45deg);
   pointer-events: none;
@@ -968,7 +968,7 @@ mark {
 
 .paperclip {
   position: absolute;
-  top: -17px;
+  top: -18px;
   right: 24px;
   color: #64748b;
   transform: rotate(18deg);
