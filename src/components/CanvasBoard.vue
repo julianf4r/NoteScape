@@ -36,6 +36,7 @@ const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
 const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
 const activeDrawingId = ref("");
+const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
 
 const visibleNotes = computed(() =>
@@ -264,7 +265,7 @@ function finishDrawing() {
   if (drawing && isMeaningfulDrawing(drawing)) {
     drawingStore.finishDrawing(drawing.id);
   } else if (drawing) {
-    drawingStore.deleteDrawing(drawing.id);
+    drawingStore.deleteDrawing(drawing.id, false);
   }
   activeDrawingId.value = "";
 }
@@ -300,6 +301,7 @@ function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __b
 }
 
 function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
+  if (drawingStore.tool !== "select") return;
   if (handActive.value || spaceDown.value || event.button === 1) return;
   drawingStore.clearSelection();
   const additive = event.shiftKey || event.ctrlKey;
@@ -334,6 +336,69 @@ function deleteSelection(noteId: string) {
 
 function deleteSelectedDrawing() {
   if (drawingStore.selectedId) drawingStore.deleteDrawing(drawingStore.selectedId);
+}
+
+function startDrawingDrag(event: MouseEvent, drawingId: string) {
+  if (drawingStore.tool !== "select" || event.button !== 0) return;
+  const drawing = drawingStore.drawings.find((item) => item.id === drawingId);
+  if (!drawing) return;
+  event.preventDefault();
+  event.stopPropagation();
+  noteStore.clearSelection();
+  drawingStore.select(drawingId);
+  drawingDrag.value = {
+    id: drawingId,
+    startX: event.clientX,
+    startY: event.clientY,
+    before: cloneDrawing(drawing),
+  };
+  window.addEventListener("mousemove", dragDrawing);
+  window.addEventListener("mouseup", endDrawingDrag, { once: true });
+}
+
+function dragDrawing(event: MouseEvent) {
+  if (!drawingDrag.value) return;
+  drawingStore.moveDrawingLive(
+    drawingDrag.value.id,
+    drawingDrag.value.before,
+    (event.clientX - drawingDrag.value.startX) / viewport.scale,
+    (event.clientY - drawingDrag.value.startY) / viewport.scale,
+  );
+}
+
+function endDrawingDrag() {
+  window.removeEventListener("mousemove", dragDrawing);
+  if (drawingDrag.value) drawingStore.commitDrawingMove(drawingDrag.value.before);
+  drawingDrag.value = null;
+}
+
+function cloneDrawing(drawing: DrawingItem): DrawingItem {
+  return {
+    ...drawing,
+    points: drawing.points?.map((point) => ({ ...point })),
+    start: drawing.start ? { ...drawing.start } : undefined,
+    end: drawing.end ? { ...drawing.end } : undefined,
+  };
+}
+
+function undo() {
+  const preferDrawing = Boolean(drawingStore.selectedId || drawingStore.tool !== "select");
+  if (preferDrawing) {
+    if (!drawingStore.undo() && noteStore.history.length) noteStore.undo();
+    return;
+  }
+  if (noteStore.history.length) noteStore.undo();
+  else drawingStore.undo();
+}
+
+function redo() {
+  const preferDrawing = Boolean(drawingStore.selectedId || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length));
+  if (preferDrawing) {
+    if (!drawingStore.redo() && noteStore.future.length) noteStore.redo();
+    return;
+  }
+  if (noteStore.future.length) noteStore.redo();
+  else drawingStore.redo();
 }
 
 function duplicateSelection(noteId: string) {
@@ -529,6 +594,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("mousemove", updateDrawing);
+  window.removeEventListener("mousemove", dragDrawing);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
   window.removeEventListener("locate-note", onLocateNote);
@@ -597,6 +663,7 @@ watch(
         :canvas-id="canvasStore.currentCanvasId"
         :drawings="currentCanvasDrawings"
         :scale="viewport.scale"
+        @drag-drawing="startDrawingDrag"
       />
       <StickyNote
         v-for="note in visibleNotes"
@@ -609,9 +676,9 @@ watch(
         :tags="tagStore.tags"
         :search-query="canvasStore.searchQuery"
         :highlighted="highlightedNoteId === note.id"
-        :pan-mode="handActive || spaceDown"
+        :pan-mode="handActive || spaceDown || drawingStore.tool !== 'select'"
         @select="onNotePointerDown($event, note)"
-        @edit="noteStore.editingId = note.id"
+        @edit="drawingStore.tool === 'select' && (noteStore.editingId = note.id)"
         @update="(patch, track) => updateSelection(note, patch, track)"
         @live="(patch) => noteStore.patchNoteLive(note.id, patch)"
         @delete="deleteSelection(note.id)"
@@ -634,8 +701,8 @@ watch(
       :drawing-stroke-width="drawingStore.strokeWidth"
       :drawing-selected="Boolean(drawingStore.selectedId)"
       @add="createNoteCenter"
-      @undo="noteStore.undo"
-      @redo="noteStore.redo"
+      @undo="undo"
+      @redo="redo"
       @zoom-in="zoomBy(0.1)"
       @zoom-out="zoomBy(-0.1)"
       @set-zoom="setZoom"

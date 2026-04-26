@@ -8,6 +8,10 @@ defineProps<{
   scale: number;
 }>();
 
+const emit = defineEmits<{
+  dragDrawing: [event: MouseEvent, drawingId: string];
+}>();
+
 const drawingStore = useDrawingStore();
 
 function selectDrawing(event: MouseEvent, id: string) {
@@ -15,6 +19,7 @@ function selectDrawing(event: MouseEvent, id: string) {
   event.preventDefault();
   event.stopPropagation();
   drawingStore.select(id);
+  emit("dragDrawing", event, id);
 }
 
 function penPoints(drawing: DrawingItem) {
@@ -107,6 +112,7 @@ function rectFor(drawing: DrawingItem) {
 .drawing-layer :deep(ellipse) {
   vector-effect: non-scaling-stroke;
   pointer-events: stroke;
+  cursor: move;
 }
 
 .drawing-layer :deep(rect),

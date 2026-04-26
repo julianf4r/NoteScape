@@ -117,3 +117,11 @@ export interface HistoryEntry {
   after?: StickyNote;
   timestamp: string;
 }
+
+export interface DrawingHistoryEntry {
+  id: string;
+  type: "create" | "update" | "delete";
+  before?: DrawingItem;
+  after?: DrawingItem;
+  timestamp: string;
+}
