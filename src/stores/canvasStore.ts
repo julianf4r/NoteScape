@@ -73,7 +73,6 @@ export const useCanvasStore = defineStore("canvas", {
       const canvas = this.canvases.find((item) => item.id === id);
       if (!canvas) return;
       canvas.viewport = { ...viewport };
-      canvas.updatedAt = now();
       void saveCanvasData(canvas).catch((error) => reportPersistenceError("保存视口", error));
     },
   },

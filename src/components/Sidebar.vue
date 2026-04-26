@@ -46,16 +46,6 @@ const hasSearchResults = computed(
   () => Boolean(canvasStore.searchQuery.trim()) && (searchResults.value.canvases.length > 0 || searchResults.value.notes.length > 0 || searchResults.value.tags.length > 0),
 );
 
-function relativeTime(value: string) {
-  const diff = Date.now() - new Date(value).getTime();
-  const hour = 3600 * 1000;
-  if (diff < 60 * 1000) return "刚刚";
-  if (diff < 24 * hour) return `${Math.max(1, Math.floor(diff / hour))} 小时前`;
-  if (diff < 48 * hour) return "昨天";
-  if (diff < 7 * 24 * hour) return `${Math.floor(diff / (24 * hour))} 天前`;
-  return "上周";
-}
-
 function createCanvas() {
   if (!appStore.databaseReady) {
     feedback.notify(appStore.loadError || "数据库未加载", "error");
@@ -259,7 +249,6 @@ function selectSearchCanvas(id: string) {
           @blur="commitRename(canvas.id)"
         />
         <span v-else class="name">{{ canvas.name }}</span>
-        <span class="time">{{ relativeTime(canvas.updatedAt) }}</span>
         <span class="row-actions">
           <button title="重命名" @click.stop="startRename(canvas.id, canvas.name)"><Pencil :size="14" /></button>
           <button title="删除" @click.stop="deleteCanvas(canvas.id, canvas.name)"><Trash2 :size="14" /></button>
