@@ -149,6 +149,7 @@ const contentStyle = computed(() => ({
     settingsStore.settings.monospaceFontFamily,
     "cursive",
   ),
+  "--note-monospace-font": buildFontFamily(settingsStore.settings.monospaceFontFamily, "monospace"),
 }));
 
 const editorStyle = computed(() => ({
@@ -523,6 +524,18 @@ mark {
 
 .editor-content :deep(p) {
   margin: 0 0 0.35em;
+}
+
+.editor-content :deep(code),
+.editor-content :deep(pre) {
+  font-family: var(--note-monospace-font), monospace;
+  font-size: 0.92em;
+  font-synthesis: none;
+}
+
+.editor-content :deep(pre) {
+  margin: 0.45em 0;
+  white-space: pre-wrap;
 }
 
 .editor-content :deep(ul),
