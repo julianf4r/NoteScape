@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { X } from "lucide-vue-next";
 import CanvasToolbar from "./CanvasToolbar.vue";
+import DrawingLayer from "./DrawingLayer.vue";
 import MiniMap from "./MiniMap.vue";
 import StickyNote from "./StickyNote.vue";
 import { useAppStore } from "../stores/appStore";
@@ -10,7 +11,8 @@ import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
-import type { NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
+import { useDrawingStore } from "../stores/drawingStore";
+import type { DrawingItem, DrawingPoint, NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 
@@ -20,6 +22,7 @@ const noteStore = useNoteStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
 const feedback = useFeedbackStore();
+const drawingStore = useDrawingStore();
 
 const board = ref<HTMLElement>();
 const viewport = reactive<ViewportState>({ offsetX: 0, offsetY: 0, scale: 1 });
@@ -32,6 +35,7 @@ const contextWorld = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
 const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
+const activeDrawingId = ref("");
 let highlightTimer: number | undefined;
 
 const visibleNotes = computed(() =>
@@ -39,6 +43,7 @@ const visibleNotes = computed(() =>
 );
 
 const currentCanvasNotes = computed(() => noteStore.notesForCanvas(canvasStore.currentCanvasId));
+const currentCanvasDrawings = computed(() => drawingStore.drawingsForCanvas(canvasStore.currentCanvasId));
 const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.searchQuery.trim()));
 const activeTag = computed(() => tagStore.activeTag);
 const searchText = computed(() => canvasStore.searchQuery.trim());
@@ -50,6 +55,7 @@ const canvasClass = computed(() => ({
 }));
 
 function createNoteAt(clientX: number, clientY: number) {
+  if (drawingStore.tool !== "select") return;
   if (!canvasStore.currentCanvasId || !board.value) return;
   const rect = board.value.getBoundingClientRect();
   const point = screenToWorld(clientX, clientY, viewport, rect);
@@ -141,6 +147,7 @@ function onWheel(event: WheelEvent) {
 }
 
 function startPan(event: MouseEvent) {
+  if (drawingStore.tool !== "select") return;
   if (event.button === 1 || handActive.value || spaceDown.value) {
     event.preventDefault();
     panStart.value = { x: event.clientX, y: event.clientY, offsetX: viewport.offsetX, offsetY: viewport.offsetY };
@@ -182,6 +189,12 @@ function clearFilters() {
 
 function onBoardMouseDown(event: MouseEvent) {
   contextMenu.value = null;
+  if (drawingStore.tool !== "select") {
+    if (!isCanvasControlTarget(event.target)) startDrawing(event);
+    noteStore.clearSelection();
+    drawingStore.clearSelection();
+    return;
+  }
   const blankTarget = isCanvasBlankTarget(event.target);
   if (noteStore.editingId && blankTarget) noteStore.stopEditing();
   if (blankTarget) {
@@ -189,13 +202,77 @@ function onBoardMouseDown(event: MouseEvent) {
       startBoxSelect(event);
     } else {
       noteStore.clearSelection();
+      drawingStore.clearSelection();
     }
   }
   if (!isCanvasControlTarget(event.target) && (blankTarget || event.button === 1 || handActive.value || spaceDown.value)) startPan(event);
 }
 
 function onBoardDoubleClick(event: MouseEvent) {
+  if (drawingStore.tool !== "select") return;
   if (isCanvasBlankTarget(event.target)) createNoteAt(event.clientX, event.clientY);
+}
+
+function drawingPointFromEvent(event: MouseEvent): DrawingPoint | null {
+  const rect = board.value?.getBoundingClientRect();
+  if (!rect) return null;
+  return screenToWorld(event.clientX, event.clientY, viewport, rect);
+}
+
+function startDrawing(event: MouseEvent) {
+  if (!canvasStore.currentCanvasId || event.button !== 0) return;
+  const point = drawingPointFromEvent(event);
+  if (!point) return;
+  event.preventDefault();
+  const base = drawingStore.tool === "pen"
+    ? { points: [point] }
+    : drawingStore.tool === "arrow"
+      ? { start: point, end: point }
+      : { start: point, x: point.x, y: point.y, width: 0, height: 0 };
+  const drawing = drawingStore.createDrawing(canvasStore.currentCanvasId, base);
+  activeDrawingId.value = drawing.id;
+  window.addEventListener("mousemove", updateDrawing);
+  window.addEventListener("mouseup", finishDrawing, { once: true });
+}
+
+function updateDrawing(event: MouseEvent) {
+  if (!activeDrawingId.value) return;
+  const point = drawingPointFromEvent(event);
+  const drawing = drawingStore.drawings.find((item) => item.id === activeDrawingId.value);
+  if (!point || !drawing) return;
+  if (drawing.type === "pen") {
+    const last = drawing.points?.[drawing.points.length - 1];
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) >= 2) drawingStore.appendPoint(drawing.id, point);
+    return;
+  }
+  if (drawing.type === "arrow") {
+    drawingStore.updateDrawing(drawing.id, { end: point });
+    return;
+  }
+  const start = drawing.start ?? point;
+  drawingStore.updateDrawing(drawing.id, {
+    x: Math.min(start.x, point.x),
+    y: Math.min(start.y, point.y),
+    width: Math.abs(point.x - start.x),
+    height: Math.abs(point.y - start.y),
+  });
+}
+
+function finishDrawing() {
+  window.removeEventListener("mousemove", updateDrawing);
+  const drawing = drawingStore.drawings.find((item) => item.id === activeDrawingId.value);
+  if (drawing && isMeaningfulDrawing(drawing)) {
+    drawingStore.finishDrawing(drawing.id);
+  } else if (drawing) {
+    drawingStore.deleteDrawing(drawing.id);
+  }
+  activeDrawingId.value = "";
+}
+
+function isMeaningfulDrawing(drawing: DrawingItem) {
+  if (drawing.type === "pen") return (drawing.points?.length ?? 0) > 1;
+  if (drawing.type === "arrow") return Boolean(drawing.start && drawing.end && Math.hypot(drawing.end.x - drawing.start.x, drawing.end.y - drawing.start.y) > 4);
+  return Math.max(drawing.width ?? 0, drawing.height ?? 0) > 4;
 }
 
 function openCanvasMenu(event: MouseEvent) {
@@ -207,6 +284,7 @@ function openCanvasMenu(event: MouseEvent) {
 }
 
 function openNoteMenu(event: MouseEvent, id: string, linkHref?: string) {
+  drawingStore.clearSelection();
   noteStore.select(id);
   if (board.value) {
     const rect = board.value.getBoundingClientRect();
@@ -223,6 +301,7 @@ function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __b
 
 function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
   if (handActive.value || spaceDown.value || event.button === 1) return;
+  drawingStore.clearSelection();
   const additive = event.shiftKey || event.ctrlKey;
   if (!noteStore.selectedIds.includes(note.id)) noteStore.select(note.id, additive);
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id)) {
@@ -248,8 +327,13 @@ function endGroupDrag() {
 }
 
 function deleteSelection(noteId: string) {
+  drawingStore.clearSelection();
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.deleteSelected();
   else noteStore.deleteNote(noteId);
+}
+
+function deleteSelectedDrawing() {
+  if (drawingStore.selectedId) drawingStore.deleteDrawing(drawingStore.selectedId);
 }
 
 function duplicateSelection(noteId: string) {
@@ -401,6 +485,11 @@ function onLocateNote(event: Event) {
 
 function onKeydown(event: KeyboardEvent) {
   if (isTextInputTarget(event.target)) return;
+  if ((event.key === "Delete" || event.key === "Backspace") && drawingStore.selectedId) {
+    event.preventDefault();
+    deleteSelectedDrawing();
+    return;
+  }
   if (event.code === "Space" && !noteStore.editingId) {
     event.preventDefault();
     spaceDown.value = true;
@@ -439,6 +528,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.removeEventListener("mousemove", updateDrawing);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
   window.removeEventListener("locate-note", onLocateNote);
@@ -490,7 +580,7 @@ watch(
       当前筛选下没有便签<br />
       <button @click.stop="clearFilters">清除筛选</button>
     </div>
-    <div v-else-if="!visibleNotes.length" class="empty-board">双击画布空白处创建第一张便签</div>
+    <div v-else-if="!visibleNotes.length && !currentCanvasDrawings.length" class="empty-board">双击画布空白处创建第一张便签</div>
 
     <div v-if="appStore.databaseReady && filterActive" class="filter-status" @mousedown.stop @dblclick.stop>
       <span v-if="activeTag" class="tag-filter">
@@ -503,6 +593,11 @@ watch(
     </div>
 
     <div v-if="appStore.databaseReady" class="canvas-content" :style="{ transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})` }">
+      <DrawingLayer
+        :canvas-id="canvasStore.currentCanvasId"
+        :drawings="currentCanvasDrawings"
+        :scale="viewport.scale"
+      />
       <StickyNote
         v-for="note in visibleNotes"
         :key="note.id"
@@ -534,6 +629,10 @@ watch(
     <CanvasToolbar
       :scale="viewport.scale"
       :hand-active="handActive"
+      :drawing-tool="drawingStore.tool"
+      :drawing-color="drawingStore.color"
+      :drawing-stroke-width="drawingStore.strokeWidth"
+      :drawing-selected="Boolean(drawingStore.selectedId)"
       @add="createNoteCenter"
       @undo="noteStore.undo"
       @redo="noteStore.redo"
@@ -542,6 +641,10 @@ watch(
       @set-zoom="setZoom"
       @reset-zoom="resetZoom"
       @toggle-hand="handActive = !handActive"
+      @set-drawing-tool="drawingStore.setTool"
+      @set-drawing-color="(color) => drawingStore.color = color"
+      @set-drawing-stroke-width="(width) => drawingStore.strokeWidth = Math.min(16, Math.max(1, width || 1))"
+      @delete-drawing="deleteSelectedDrawing"
       @settings="settingsStore.togglePanel()"
     />
 

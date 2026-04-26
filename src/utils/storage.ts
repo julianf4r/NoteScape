@@ -1,4 +1,4 @@
-import type { AppData, AppSettings, CanvasItem, StickyNote, TagItem } from "../types";
+import type { AppData, AppSettings, CanvasItem, DrawingItem, StickyNote, TagItem } from "../types";
 import { invoke } from "@tauri-apps/api/core";
 
 export interface DatabaseLoadResult {
@@ -32,6 +32,7 @@ export function parseData(raw: string): AppData {
     throw new Error("数据格式不正确");
   }
   parsed.settings = normalizeSettings(parsed.settings);
+  parsed.drawings = Array.isArray(parsed.drawings) ? parsed.drawings : [];
   return parsed;
 }
 
@@ -73,6 +74,18 @@ export async function deleteNoteData(id: string) {
 
 export async function deleteNotesByCanvasData(canvasId: string) {
   await invoke("delete_notes_by_canvas", { canvasId });
+}
+
+export async function saveDrawingData(drawing: DrawingItem) {
+  await invoke("save_drawing", { drawing: JSON.stringify(drawing) });
+}
+
+export async function deleteDrawingData(id: string) {
+  await invoke("delete_drawing", { id });
+}
+
+export async function deleteDrawingsByCanvasData(canvasId: string) {
+  await invoke("delete_drawings_by_canvas", { canvasId });
 }
 
 export async function saveTagData(tag: TagItem) {

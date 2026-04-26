@@ -21,6 +21,7 @@ pub(crate) fn default_app_data() -> AppData {
             deleted_at: None,
             viewport: None,
         }],
+        drawings: Vec::new(),
         notes: vec![StickyNote {
             id: "note-default".to_string(),
             canvas_id: "canvas-default".to_string(),

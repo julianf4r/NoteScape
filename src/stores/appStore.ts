@@ -6,6 +6,7 @@ import { useNoteStore } from "./noteStore";
 import { useSettingsStore } from "./settingsStore";
 import { useTagStore } from "./tagStore";
 import { useFeedbackStore } from "./feedbackStore";
+import { useDrawingStore } from "./drawingStore";
 
 export const useAppStore = defineStore("app", {
   state: () => ({
@@ -20,6 +21,7 @@ export const useAppStore = defineStore("app", {
     applyData(data: AppData) {
       useCanvasStore().setCanvases(data.canvases);
       useNoteStore().setNotes(data.notes);
+      useDrawingStore().setDrawings(data.drawings ?? []);
       useTagStore().setTags(data.tags);
       useSettingsStore().setSettings(data.settings);
     },
@@ -42,6 +44,7 @@ export const useAppStore = defineStore("app", {
         version: 1,
         canvases: useCanvasStore().canvases,
         notes: useNoteStore().notes,
+        drawings: useDrawingStore().drawings,
         tags: useTagStore().tags,
         settings: useSettingsStore().settings,
       };

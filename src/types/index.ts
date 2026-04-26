@@ -10,6 +10,31 @@ export type NoteColor =
 
 export type NoteDecoration = "none" | "pin" | "tape" | "double-tape" | "paperclip" | "fold" | "corner-tape";
 
+export type DrawingTool = "select" | "pen" | "arrow" | "rect" | "ellipse";
+
+export interface DrawingPoint {
+  x: number;
+  y: number;
+}
+
+export interface DrawingItem {
+  id: string;
+  canvasId: string;
+  type: DrawingTool;
+  points?: DrawingPoint[];
+  start?: DrawingPoint;
+  end?: DrawingPoint;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  color: string;
+  strokeWidth: number;
+  zIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ChecklistItem {
   id: string;
   text: string;
@@ -74,6 +99,7 @@ export interface AppData {
   version: number;
   canvases: CanvasItem[];
   notes: StickyNote[];
+  drawings: DrawingItem[];
   tags: TagItem[];
   settings: AppSettings;
 }

@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
-import { ChevronDown, Hand, Minus, Plus, RotateCcw, RotateCw, SlidersHorizontal, StickyNote } from "lucide-vue-next";
+import { ArrowUpRight, ChevronDown, Circle, Hand, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, StickyNote, Trash2 } from "lucide-vue-next";
+import type { DrawingTool } from "../types";
 
 const props = defineProps<{
   scale: number;
   handActive: boolean;
+  drawingTool: DrawingTool;
+  drawingColor: string;
+  drawingStrokeWidth: number;
+  drawingSelected: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,6 +21,10 @@ const emit = defineEmits<{
   resetZoom: [];
   setZoom: [scale: number];
   toggleHand: [];
+  setDrawingTool: [tool: DrawingTool];
+  setDrawingColor: [color: string];
+  setDrawingStrokeWidth: [width: number];
+  deleteDrawing: [];
   settings: [];
 }>();
 
@@ -23,6 +32,13 @@ const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 const zoomOpen = ref(false);
 const zoomMenu = ref<HTMLElement>();
 const zoomLabel = computed(() => `${Math.round(props.scale * 100)}%`);
+const drawingTools: Array<{ tool: DrawingTool; title: string; icon: typeof MousePointer2 }> = [
+  { tool: "select", title: "选择绘图", icon: MousePointer2 },
+  { tool: "pen", title: "画笔", icon: Pencil },
+  { tool: "arrow", title: "箭头", icon: ArrowUpRight },
+  { tool: "rect", title: "方框", icon: Square },
+  { tool: "ellipse", title: "圆形", icon: Circle },
+];
 
 function selectZoom(scale: number) {
   emit("setZoom", scale);
@@ -61,6 +77,29 @@ onBeforeUnmount(closeZoom);
     <span></span>
     <button title="手型工具" :class="{ active: handActive }" @click="emit('toggleHand')"><Hand :size="20" /></button>
     <button title="新建便签" @click="emit('add')"><StickyNote :size="20" /></button>
+    <span></span>
+    <button
+      v-for="item in drawingTools"
+      :key="item.tool"
+      :title="item.title"
+      :class="{ active: drawingTool === item.tool }"
+      @click="emit('setDrawingTool', item.tool)"
+    >
+      <component :is="item.icon" :size="19" />
+    </button>
+    <label class="drawing-color" title="绘图颜色" :style="{ '--drawing-color': drawingColor }">
+      <input type="color" :value="drawingColor" @input="emit('setDrawingColor', ($event.target as HTMLInputElement).value)" />
+    </label>
+    <input
+      class="stroke-input"
+      title="线宽"
+      type="number"
+      min="1"
+      max="16"
+      :value="drawingStrokeWidth"
+      @change="emit('setDrawingStrokeWidth', Number(($event.target as HTMLInputElement).value))"
+    />
+    <button title="删除选中绘图" :disabled="!drawingSelected" @click="emit('deleteDrawing')"><Trash2 :size="18" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>
     <div ref="zoomMenu" class="zoom-menu" @mousedown.stop>
@@ -116,6 +155,11 @@ button.active {
   background: #f3f6fb;
 }
 
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
 span {
   width: 1px;
   height: 50px;
@@ -163,5 +207,42 @@ span {
 .zoom-options button.active {
   color: #1d4ed8;
   background: #e8f1ff;
+}
+
+.drawing-color {
+  position: relative;
+  width: 46px;
+  height: 50px;
+  display: inline-grid;
+  place-items: center;
+}
+
+.drawing-color::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 50%;
+  background: var(--drawing-color);
+}
+
+.drawing-color input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.stroke-input {
+  width: 42px;
+  height: 28px;
+  margin: 0 2px;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  text-align: center;
+  outline: 0;
 }
 </style>

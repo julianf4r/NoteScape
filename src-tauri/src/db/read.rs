@@ -5,7 +5,8 @@ use rusqlite::{params, Connection, OptionalExtension};
 use super::{open_database, parse_app_data, write::save_structured_data};
 use crate::defaults::default_app_data_json;
 use crate::models::{
-    AppData, AppSettings, CanvasItem, ChecklistItem, StickyNote, TagItem, ViewportState,
+    AppData, AppSettings, CanvasItem, ChecklistItem, DrawingItem, StickyNote, TagItem,
+    ViewportState,
 };
 
 fn is_database_empty(conn: &Connection) -> Result<bool, String> {
@@ -38,6 +39,7 @@ pub(crate) fn load_structured_data(conn: &Connection) -> Result<AppData, String>
     };
 
     let canvases = load_canvases(conn)?;
+    let drawings = load_drawings(conn)?;
     let tags = load_tags(conn)?;
     let mut notes = load_notes(conn)?;
 
@@ -50,6 +52,7 @@ pub(crate) fn load_structured_data(conn: &Connection) -> Result<AppData, String>
         version,
         canvases,
         notes,
+        drawings,
         tags,
         settings,
     })
@@ -107,7 +110,7 @@ pub(crate) fn load_existing_database(path: &Path) -> Result<String, String> {
     if !path.exists() {
         return Err("所选数据库文件不存在".to_string());
     }
-    let conn = Connection::open(path)
+    let conn = open_database(path)
         .map_err(|_| "无法打开所选文件，它不是有效的 SQLite 数据库".to_string())?;
     validate_existing_database(&conn)?;
     serde_json::to_string(&load_structured_data(&conn)?).map_err(|error| error.to_string())
@@ -204,6 +207,30 @@ fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
                 color: row.get(2)?,
                 count: row.get(3)?,
                 created_at: row.get(4)?,
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_drawings(conn: &Connection) -> Result<Vec<DrawingItem>, String> {
+    let mut statement = conn
+        .prepare(
+            "SELECT data
+             FROM drawings
+             ORDER BY z_index ASC, created_at ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            let data: String = row.get(0)?;
+            serde_json::from_str::<DrawingItem>(&data).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
             })
         })
         .map_err(|error| error.to_string())?;

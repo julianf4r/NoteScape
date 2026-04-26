@@ -51,6 +51,16 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             FOREIGN KEY(canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS drawings (
+            id TEXT PRIMARY KEY,
+            canvas_id TEXT NOT NULL,
+            data TEXT NOT NULL,
+            z_index INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
+        );
+
         CREATE TABLE IF NOT EXISTS note_tags (
             note_id TEXT NOT NULL,
             tag_id TEXT NOT NULL,
@@ -69,6 +79,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
         );
 
         CREATE INDEX IF NOT EXISTS idx_notes_canvas_id ON notes(canvas_id);
+        CREATE INDEX IF NOT EXISTS idx_drawings_canvas_id ON drawings(canvas_id);
         CREATE INDEX IF NOT EXISTS idx_note_tags_tag_id ON note_tags(tag_id);
         ",
     )

@@ -4,7 +4,9 @@ use std::path::PathBuf;
 use tauri::AppHandle;
 
 use crate::db;
-use crate::models::{AppSettings, CanvasItem, DatabaseLoadResult, StickyNote, TagItem};
+use crate::models::{
+    AppSettings, CanvasItem, DatabaseLoadResult, DrawingItem, StickyNote, TagItem,
+};
 use crate::paths::{
     current_database_path, default_db_path, read_database_path, write_database_path,
 };
@@ -97,6 +99,28 @@ pub(crate) fn delete_notes_by_canvas(app: AppHandle, canvas_id: String) -> Resul
     let db_path = current_database_path(&app)?;
     let conn = db::open_database(&db_path)?;
     db::delete_notes_by_canvas(&conn, canvas_id)
+}
+
+#[tauri::command]
+pub(crate) fn save_drawing(app: AppHandle, drawing: String) -> Result<(), String> {
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    let drawing: DrawingItem = serde_json::from_str(&drawing).map_err(|error| error.to_string())?;
+    db::upsert_drawing(&conn, &drawing)
+}
+
+#[tauri::command]
+pub(crate) fn delete_drawing(app: AppHandle, id: String) -> Result<(), String> {
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    db::delete_drawing(&conn, id)
+}
+
+#[tauri::command]
+pub(crate) fn delete_drawings_by_canvas(app: AppHandle, canvas_id: String) -> Result<(), String> {
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    db::delete_drawings_by_canvas(&conn, canvas_id)
 }
 
 #[tauri::command]

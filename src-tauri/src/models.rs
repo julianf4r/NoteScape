@@ -12,6 +12,8 @@ pub(crate) struct AppData {
     pub(crate) version: i64,
     pub(crate) canvases: Vec<CanvasItem>,
     pub(crate) notes: Vec<StickyNote>,
+    #[serde(default)]
+    pub(crate) drawings: Vec<DrawingItem>,
     pub(crate) tags: Vec<TagItem>,
     pub(crate) settings: AppSettings,
 }
@@ -69,6 +71,34 @@ pub(crate) struct ChecklistItem {
     pub(crate) id: String,
     pub(crate) text: String,
     pub(crate) checked: bool,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DrawingPoint {
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DrawingItem {
+    pub(crate) id: String,
+    pub(crate) canvas_id: String,
+    #[serde(rename = "type")]
+    pub(crate) kind: String,
+    pub(crate) points: Option<Vec<DrawingPoint>>,
+    pub(crate) start: Option<DrawingPoint>,
+    pub(crate) end: Option<DrawingPoint>,
+    pub(crate) x: Option<f64>,
+    pub(crate) y: Option<f64>,
+    pub(crate) width: Option<f64>,
+    pub(crate) height: Option<f64>,
+    pub(crate) color: String,
+    pub(crate) stroke_width: f64,
+    pub(crate) z_index: i64,
+    pub(crate) created_at: String,
+    pub(crate) updated_at: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]

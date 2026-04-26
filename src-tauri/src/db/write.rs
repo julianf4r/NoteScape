@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 
 use super::{open_database, read::load_structured_data};
 use crate::defaults::default_app_data;
-use crate::models::{AppData, AppSettings, CanvasItem, StickyNote, TagItem};
+use crate::models::{AppData, AppSettings, CanvasItem, DrawingItem, StickyNote, TagItem};
 
 pub(crate) fn save_structured_data(
     conn: &mut Connection,
@@ -17,6 +17,8 @@ pub(crate) fn save_structured_data(
     tx.execute("DELETE FROM note_tags", [])
         .map_err(|error| error.to_string())?;
     tx.execute("DELETE FROM notes", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM drawings", [])
         .map_err(|error| error.to_string())?;
     tx.execute("DELETE FROM tags", [])
         .map_err(|error| error.to_string())?;
@@ -104,6 +106,10 @@ pub(crate) fn save_structured_data(
         .map_err(|error| error.to_string())?;
     }
 
+    for drawing in &app_data.drawings {
+        insert_drawing(&tx, drawing)?;
+    }
+
     for note in &app_data.notes {
         tx.execute(
             "INSERT INTO notes (
@@ -163,6 +169,23 @@ pub(crate) fn save_structured_data(
     tx.commit().map_err(|error| error.to_string())
 }
 
+fn insert_drawing(conn: &Connection, drawing: &DrawingItem) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO drawings (id, canvas_id, data, z_index, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            drawing.id,
+            drawing.canvas_id,
+            serde_json::to_string(drawing).map_err(|error| error.to_string())?,
+            drawing.z_index,
+            drawing.created_at,
+            drawing.updated_at
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub(crate) fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<(), String> {
     conn.execute(
         "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
@@ -199,6 +222,28 @@ pub(crate) fn upsert_tag(conn: &Connection, tag: &TagItem) -> Result<(), String>
             name = excluded.name,
             color = excluded.color",
         params![tag.id, tag.name, tag.color, 0, tag.created_at],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub(crate) fn upsert_drawing(conn: &Connection, drawing: &DrawingItem) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO drawings (id, canvas_id, data, z_index, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(id) DO UPDATE SET
+            canvas_id = excluded.canvas_id,
+            data = excluded.data,
+            z_index = excluded.z_index,
+            updated_at = excluded.updated_at",
+        params![
+            drawing.id,
+            drawing.canvas_id,
+            serde_json::to_string(drawing).map_err(|error| error.to_string())?,
+            drawing.z_index,
+            drawing.created_at,
+            drawing.updated_at
+        ],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
@@ -369,6 +414,24 @@ pub(crate) fn delete_note(conn: &Connection, id: String) -> Result<(), String> {
 pub(crate) fn delete_notes_by_canvas(conn: &Connection, canvas_id: String) -> Result<(), String> {
     conn.execute("DELETE FROM notes WHERE canvas_id = ?1", params![canvas_id])
         .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub(crate) fn delete_drawing(conn: &Connection, id: String) -> Result<(), String> {
+    conn.execute("DELETE FROM drawings WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub(crate) fn delete_drawings_by_canvas(
+    conn: &Connection,
+    canvas_id: String,
+) -> Result<(), String> {
+    conn.execute(
+        "DELETE FROM drawings WHERE canvas_id = ?1",
+        params![canvas_id],
+    )
+    .map_err(|error| error.to_string())?;
     Ok(())
 }
 
