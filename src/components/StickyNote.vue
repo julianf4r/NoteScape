@@ -60,7 +60,6 @@ const decorationOptions: Array<{ value: NoteDecoration; label: string }> = [
   { value: "pin", label: "图钉" },
   { value: "double-tape", label: "双胶带" },
   { value: "paperclip", label: "回形针" },
-  { value: "fold", label: "折角" },
   { value: "corner-tape", label: "角贴" },
 ];
 
@@ -408,7 +407,6 @@ function toggleDecorationPanel() {
       <i></i>
     </div>
     <div v-if="decoration === 'paperclip'" class="paperclip"><Paperclip :size="40" /></div>
-    <div v-if="decoration === 'fold'" class="fold"></div>
     <div v-if="decoration === 'corner-tape'" class="corner-tape"></div>
 
     <template v-if="props.editing">
@@ -899,17 +897,6 @@ mark {
   transform: rotate(18deg);
 }
 
-.preview-fold::before {
-  content: "";
-  position: absolute;
-  right: 4px;
-  top: 4px;
-  width: 0;
-  height: 0;
-  border-top: 11px solid #cbd5e1;
-  border-left: 11px solid transparent;
-}
-
 .preview-corner-tape::before {
   right: 2px;
   top: 2px;
@@ -974,26 +961,6 @@ mark {
   transform: rotate(18deg);
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.62));
   pointer-events: none;
-}
-
-.fold {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 32px;
-  height: 32px;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.fold::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  border-top: 32px solid rgba(255, 255, 255, 0.72);
-  border-left: 32px solid rgba(0, 0, 0, 0.08);
-  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 .corner-tape {

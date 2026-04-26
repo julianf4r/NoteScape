@@ -12,7 +12,7 @@ export const noteStylePresets: NoteStylePreset[] = [
   { color: "blue", width: 240, height: 220, decoration: "pin" },
   { color: "pink", width: 230, height: 210, decoration: "none" },
   { color: "green", width: 220, height: 200, decoration: "paperclip" },
-  { color: "purple", width: 225, height: 205, decoration: "fold" },
+  { color: "purple", width: 225, height: 205, decoration: "corner-tape" },
   { color: "white", width: 305, height: 320, decoration: "tape" },
   { color: "grid-pink", width: 290, height: 270, decoration: "double-tape" },
   { color: "grid-white", width: 230, height: 210, decoration: "corner-tape" },

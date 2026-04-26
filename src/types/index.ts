@@ -8,7 +8,7 @@ export type NoteColor =
   | "grid-pink"
   | "grid-white";
 
-export type NoteDecoration = "none" | "pin" | "tape" | "double-tape" | "paperclip" | "fold" | "corner-tape";
+export type NoteDecoration = "none" | "pin" | "tape" | "double-tape" | "paperclip" | "corner-tape";
 
 export type DrawingTool = "select" | "pen" | "arrow" | "rect" | "ellipse";
 
