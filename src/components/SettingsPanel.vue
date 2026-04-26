@@ -119,7 +119,6 @@ async function backupCurrentDatabase() {
         <h2>设置</h2>
         <button class="icon-button" @click="settingsStore.togglePanel()"><X :size="18" /></button>
       </header>
-      <p v-if="appStore.saveStatus !== 'idle'" class="save-status" :class="appStore.saveStatus">{{ appStore.statusMessage || appStore.saveStatus }}</p>
 
       <section>
         <h3>外观</h3>
@@ -346,28 +345,6 @@ input[type="text"] {
   border-radius: 7px;
   font-size: 13px;
   line-height: 1.5;
-}
-
-.save-status {
-  margin: -6px 0 10px;
-  padding: 8px 10px;
-  border-radius: 7px;
-  font-size: 13px;
-}
-
-.save-status.saved {
-  color: #166534;
-  background: #dcfce7;
-}
-
-.save-status.saving {
-  color: #1d4ed8;
-  background: #dbeafe;
-}
-
-.save-status.error {
-  color: #991b1b;
-  background: #fee2e2;
 }
 
 </style>
