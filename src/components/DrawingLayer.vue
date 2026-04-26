@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { DrawingItem } from "../types";
+import type { DrawingItem, DrawingPoint } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
 defineProps<{
@@ -22,8 +22,36 @@ function selectDrawing(event: MouseEvent, id: string) {
   emit("dragDrawing", event, id);
 }
 
-function penPoints(drawing: DrawingItem) {
-  return (drawing.points ?? []).map((point) => `${point.x},${point.y}`).join(" ");
+function smoothPenPath(drawing: DrawingItem) {
+  return pointsToSmoothPath(drawing.points ?? []);
+}
+
+function pointsToSmoothPath(points: DrawingPoint[]) {
+  if (!points.length) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+  if (points.length === 2) return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+
+  const [first, second] = points;
+  const firstMid = midpoint(first, second);
+  const commands = [`M ${first.x} ${first.y}`, `L ${firstMid.x} ${firstMid.y}`];
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const current = points[index];
+    const next = points[index + 1];
+    const mid = midpoint(current, next);
+    commands.push(`Q ${current.x} ${current.y} ${mid.x} ${mid.y}`);
+  }
+
+  const last = points[points.length - 1];
+  commands.push(`L ${last.x} ${last.y}`);
+  return commands.join(" ");
+}
+
+function midpoint(a: DrawingPoint, b: DrawingPoint) {
+  return {
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  };
 }
 
 function rectFor(drawing: DrawingItem) {
@@ -51,9 +79,9 @@ function rectFor(drawing: DrawingItem) {
     </defs>
 
     <g v-for="drawing in drawings" :key="drawing.id" :class="{ selected: drawingStore.selectedId === drawing.id }">
-      <polyline
+      <path
         v-if="drawing.type === 'pen'"
-        :points="penPoints(drawing)"
+        :d="smoothPenPath(drawing)"
         :stroke="drawing.color"
         :stroke-width="drawing.strokeWidth"
         fill="none"
@@ -106,7 +134,7 @@ function rectFor(drawing: DrawingItem) {
   overflow: visible;
 }
 
-.drawing-layer :deep(polyline),
+.drawing-layer :deep(path),
 .drawing-layer :deep(line),
 .drawing-layer :deep(rect),
 .drawing-layer :deep(ellipse) {
@@ -120,7 +148,7 @@ function rectFor(drawing: DrawingItem) {
   pointer-events: visiblePainted;
 }
 
-.drawing-layer .selected :deep(polyline),
+.drawing-layer .selected :deep(path),
 .drawing-layer .selected :deep(line),
 .drawing-layer .selected :deep(rect),
 .drawing-layer .selected :deep(ellipse) {

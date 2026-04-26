@@ -243,7 +243,8 @@ function updateDrawing(event: MouseEvent) {
   if (!point || !drawing) return;
   if (drawing.type === "pen") {
     const last = drawing.points?.[drawing.points.length - 1];
-    if (!last || Math.hypot(point.x - last.x, point.y - last.y) >= 2) drawingStore.appendPoint(drawing.id, point);
+    const minDistance = Math.max(2, drawing.strokeWidth * 0.22);
+    if (!last || Math.hypot(point.x - last.x, point.y - last.y) >= minDistance) drawingStore.appendPoint(drawing.id, point);
     return;
   }
   if (drawing.type === "arrow") {
