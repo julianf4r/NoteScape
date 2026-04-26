@@ -54,6 +54,73 @@ function midpoint(a: DrawingPoint, b: DrawingPoint) {
   };
 }
 
+function arrowGeometry(drawing: DrawingItem) {
+  const start = drawing.start ?? { x: 0, y: 0 };
+  const end = drawing.end ?? start;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+
+  if (length < 1) {
+    return {
+      main: `M ${start.x} ${start.y} L ${end.x} ${end.y}`,
+      left: "",
+      right: "",
+    };
+  }
+
+  const seed = seededUnit(drawing.id);
+  const unitX = dx / length;
+  const unitY = dy / length;
+  const normalX = -unitY;
+  const normalY = unitX;
+  const curveOffset = clamp((seed - 0.5) * length * 0.055, -18, 18);
+  const control = {
+    x: (start.x + end.x) / 2 + normalX * curveOffset,
+    y: (start.y + end.y) / 2 + normalY * curveOffset,
+  };
+  const tangentX = end.x - control.x;
+  const tangentY = end.y - control.y;
+  const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+  const backX = -tangentX / tangentLength;
+  const backY = -tangentY / tangentLength;
+  const headNormalX = -backY;
+  const headNormalY = backX;
+  const headLength = clamp(Math.max(16, drawing.strokeWidth * 2.8), 16, 34);
+  const spread = headLength * 0.58;
+  const leftLength = headLength * (0.9 + seededUnit(`${drawing.id}:left`) * 0.18);
+  const rightLength = headLength * (0.9 + seededUnit(`${drawing.id}:right`) * 0.18);
+  const leftSpread = spread * (0.9 + seededUnit(`${drawing.id}:left-spread`) * 0.22);
+  const rightSpread = spread * (0.9 + seededUnit(`${drawing.id}:right-spread`) * 0.22);
+  const left = {
+    x: end.x + backX * leftLength + headNormalX * leftSpread,
+    y: end.y + backY * leftLength + headNormalY * leftSpread,
+  };
+  const right = {
+    x: end.x + backX * rightLength - headNormalX * rightSpread,
+    y: end.y + backY * rightLength - headNormalY * rightSpread,
+  };
+
+  return {
+    main: `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`,
+    left: `M ${end.x} ${end.y} L ${left.x} ${left.y}`,
+    right: `M ${end.x} ${end.y} L ${right.x} ${right.y}`,
+  };
+}
+
+function seededUnit(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967295;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function rectFor(drawing: DrawingItem) {
   return {
     x: drawing.x ?? 0,
@@ -72,12 +139,6 @@ function rectFor(drawing: DrawingItem) {
     height="2200"
     viewBox="0 0 2800 2200"
   >
-    <defs>
-      <marker id="drawing-arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-        <path d="M0,0 L0,6 L8,3 z" fill="context-stroke" />
-      </marker>
-    </defs>
-
     <g v-for="drawing in drawings" :key="drawing.id" :class="{ selected: drawingStore.selectedId === drawing.id }">
       <path
         v-if="drawing.type === 'pen'"
@@ -90,19 +151,38 @@ function rectFor(drawing: DrawingItem) {
         stroke-linejoin="round"
         @mousedown="selectDrawing($event, drawing.id)"
       />
-      <line
+      <g
         v-else-if="drawing.type === 'arrow'"
-        class="drawing-stroke"
-        :x1="drawing.start?.x ?? 0"
-        :y1="drawing.start?.y ?? 0"
-        :x2="drawing.end?.x ?? 0"
-        :y2="drawing.end?.y ?? 0"
-        :stroke="drawing.color"
-        :stroke-width="drawing.strokeWidth"
-        stroke-linecap="round"
-        marker-end="url(#drawing-arrowhead)"
         @mousedown="selectDrawing($event, drawing.id)"
-      />
+      >
+        <path
+          class="drawing-stroke"
+          :d="arrowGeometry(drawing).main"
+          :stroke="drawing.color"
+          :stroke-width="drawing.strokeWidth"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          class="drawing-stroke"
+          :d="arrowGeometry(drawing).left"
+          :stroke="drawing.color"
+          :stroke-width="drawing.strokeWidth"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          class="drawing-stroke"
+          :d="arrowGeometry(drawing).right"
+          :stroke="drawing.color"
+          :stroke-width="drawing.strokeWidth"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </g>
       <line
         v-else-if="drawing.type === 'line'"
         class="drawing-stroke"
