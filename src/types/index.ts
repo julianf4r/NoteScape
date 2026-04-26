@@ -8,6 +8,8 @@ export type NoteColor =
   | "grid-pink"
   | "grid-white";
 
+export type NoteDecoration = "none" | "pin" | "tape" | "double-tape" | "paperclip" | "fold" | "corner-tape";
+
 export interface ChecklistItem {
   id: string;
   text: string;
@@ -32,7 +34,7 @@ export interface StickyNote {
   fontSize: number;
   fontWeight: "normal" | "medium" | "bold";
   textAlign: "left" | "center";
-  decoration?: "none" | "pin" | "tape";
+  decoration?: NoteDecoration;
   checkedItems?: ChecklistItem[];
   createdAt: string;
   updatedAt: string;

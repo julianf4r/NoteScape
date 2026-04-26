@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Minus, Pin, Plus, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Minus, Paperclip, Pin, Plus, Sparkles, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
 import { EditorContent, type JSONContent, useEditor } from "@tiptap/vue-3";
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -9,7 +9,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
-import type { StickyNote, TagItem } from "../types";
+import type { NoteDecoration, StickyNote, TagItem } from "../types";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColors } from "../utils/colors";
@@ -47,11 +47,22 @@ const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const showTags = ref(false);
+const showDecorations = ref(false);
 const heightLimited = ref(false);
 const limitNoticeShown = ref(false);
 const decoration = computed(() => props.note.decoration ?? "none");
 const frontTitle = computed(() => (props.note.pinned ? "取消置顶" : "置顶"));
 const maxNoteHeight = 1000;
+
+const decorationOptions: Array<{ value: NoteDecoration; label: string }> = [
+  { value: "none", label: "无" },
+  { value: "tape", label: "胶带" },
+  { value: "pin", label: "图钉" },
+  { value: "double-tape", label: "双胶带" },
+  { value: "paperclip", label: "回形针" },
+  { value: "fold", label: "折角" },
+  { value: "corner-tape", label: "角贴" },
+];
 
 function textToDoc(text: string): JSONContent {
   return {
@@ -364,6 +375,21 @@ function onContextMenu(event: MouseEvent) {
 function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: boolean; state: { selection: { empty: boolean } } } }) {
   return props.editing && currentEditor.isEditable && !currentEditor.state.selection.empty;
 }
+
+function changeDecoration(value: NoteDecoration) {
+  emit("update", { decoration: value }, true);
+  showDecorations.value = false;
+}
+
+function toggleTagsPanel() {
+  showTags.value = !showTags.value;
+  if (showTags.value) showDecorations.value = false;
+}
+
+function toggleDecorationPanel() {
+  showDecorations.value = !showDecorations.value;
+  if (showDecorations.value) showTags.value = false;
+}
 </script>
 
 <template>
@@ -377,6 +403,13 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   >
     <div v-if="decoration === 'pin'" class="pin"><Pin :size="22" /></div>
     <div v-if="decoration === 'tape'" class="tape"></div>
+    <div v-if="decoration === 'double-tape'" class="double-tape">
+      <i></i>
+      <i></i>
+    </div>
+    <div v-if="decoration === 'paperclip'" class="paperclip"><Paperclip :size="34" /></div>
+    <div v-if="decoration === 'fold'" class="fold"></div>
+    <div v-if="decoration === 'corner-tape'" class="corner-tape"></div>
 
     <template v-if="props.editing">
       <BubbleMenu
@@ -411,7 +444,8 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
       <input class="font-input" type="number" min="12" max="32" :value="props.note.fontSize" @change="setFontSize" />
       <button title="增大字号" @click="changeFontSize(1)"><Plus :size="14" /></button>
       <button :title="frontTitle" :class="{ active: props.note.pinned }" @click="emit('front')"><ChevronsUp :size="15" /></button>
-      <button title="标签" :class="{ active: showTags }" @click="showTags = !showTags"><Tags :size="15" /></button>
+      <button title="标签" :class="{ active: showTags }" @click="toggleTagsPanel"><Tags :size="15" /></button>
+      <button title="装饰" :class="{ active: showDecorations }" @click="toggleDecorationPanel"><Sparkles :size="15" /></button>
       <button title="复制文字" @click="emit('copyText')"><FileText :size="15" /></button>
       <button title="复制便签" @click="emit('duplicate')"><Copy :size="15" /></button>
       <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>
@@ -428,6 +462,18 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
         <span>{{ tag.name }}</span>
       </button>
       <p v-if="!props.tags.length">暂无标签</p>
+    </div>
+
+    <div v-if="props.selected && !props.editing && showDecorations" class="decoration-panel">
+      <button
+        v-for="option in decorationOptions"
+        :key="option.value"
+        :class="{ active: decoration === option.value }"
+        @click="changeDecoration(option.value)"
+      >
+        <span :class="['decoration-preview', `preview-${option.value}`]"></span>
+        <b>{{ option.label }}</b>
+      </button>
     </div>
 
     <span v-if="props.selected && !props.editing" class="resize-handle" @mousedown="startResize"></span>
@@ -581,7 +627,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  width: 270px;
+  width: 300px;
   padding: 5px;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -733,6 +779,145 @@ mark {
   font-size: 13px;
 }
 
+.decoration-panel {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 12px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  width: 190px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  box-shadow: var(--shadow-md);
+  transform: translateX(-50%);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.decoration-panel button {
+  min-height: 32px;
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  color: #374151;
+  background: transparent;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.decoration-panel button:hover,
+.decoration-panel button.active {
+  background: #eef2f7;
+}
+
+.decoration-panel b {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.decoration-preview {
+  position: relative;
+  display: block;
+  width: 24px;
+  height: 20px;
+}
+
+.preview-none::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 9px;
+  width: 14px;
+  height: 2px;
+  background: #cbd5e1;
+}
+
+.preview-tape::before,
+.preview-double-tape::before,
+.preview-double-tape::after,
+.preview-corner-tape::before {
+  content: "";
+  position: absolute;
+  background: rgba(201, 173, 128, 0.64);
+}
+
+.preview-tape::before {
+  left: 4px;
+  top: 6px;
+  width: 16px;
+  height: 8px;
+  transform: rotate(4deg);
+}
+
+.preview-double-tape::before,
+.preview-double-tape::after {
+  top: 5px;
+  width: 10px;
+  height: 7px;
+}
+
+.preview-double-tape::before {
+  left: 1px;
+  transform: rotate(-10deg);
+}
+
+.preview-double-tape::after {
+  right: 1px;
+  transform: rotate(10deg);
+}
+
+.preview-pin::before {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 3px;
+  width: 10px;
+  height: 10px;
+  background: #0ea5e9;
+  border-radius: 50%;
+  box-shadow: 0 7px 0 -4px #075985;
+}
+
+.preview-paperclip::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: 2px;
+  width: 10px;
+  height: 16px;
+  border: 2px solid #64748b;
+  border-left-color: transparent;
+  border-radius: 8px;
+  transform: rotate(18deg);
+}
+
+.preview-fold::before {
+  content: "";
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 0;
+  height: 0;
+  border-top: 11px solid #cbd5e1;
+  border-left: 11px solid transparent;
+}
+
+.preview-corner-tape::before {
+  right: 2px;
+  top: 2px;
+  width: 14px;
+  height: 8px;
+  transform: rotate(42deg);
+}
+
 .tape {
   position: absolute;
   top: -10px;
@@ -741,6 +926,7 @@ mark {
   height: 28px;
   background: rgba(226, 202, 165, 0.55);
   transform: translateX(-50%) rotate(2deg);
+  pointer-events: none;
 }
 
 .pin {
@@ -753,5 +939,67 @@ mark {
   height: 22px;
   color: #0369a1;
   transform: translateX(-50%) rotate(45deg);
+  pointer-events: none;
+}
+
+.double-tape {
+  pointer-events: none;
+}
+
+.double-tape i,
+.corner-tape {
+  position: absolute;
+  width: 54px;
+  height: 24px;
+  background: rgba(226, 202, 165, 0.52);
+}
+
+.double-tape i:first-child {
+  top: -9px;
+  left: 28px;
+  transform: rotate(-7deg);
+}
+
+.double-tape i:last-child {
+  top: -8px;
+  right: 28px;
+  transform: rotate(6deg);
+}
+
+.paperclip {
+  position: absolute;
+  top: -17px;
+  right: 24px;
+  color: #64748b;
+  transform: rotate(18deg);
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.62));
+  pointer-events: none;
+}
+
+.fold {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.fold::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-top: 32px solid rgba(255, 255, 255, 0.72);
+  border-left: 32px solid rgba(0, 0, 0, 0.08);
+  box-shadow: -2px 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.corner-tape {
+  top: -4px;
+  right: -14px;
+  transform: rotate(42deg);
+  pointer-events: none;
 }
 </style>
