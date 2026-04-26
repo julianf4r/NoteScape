@@ -37,6 +37,7 @@ const boxSelect = ref<{ startX: number; startY: number; currentX: number; curren
 const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
 const mixedDrag = ref<{ startX: number; startY: number; beforeNotes: StickyNoteType[]; beforeDrawings: DrawingItem[] } | null>(null);
 const activeDrawingId = ref("");
+const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
 
@@ -143,7 +144,6 @@ function onWheel(event: WheelEvent) {
 }
 
 function startPan(event: MouseEvent) {
-  if (drawingStore.tool !== "select") return;
   if (event.button === 1 || handActive.value || spaceDown.value) {
     event.preventDefault();
     panStart.value = { x: event.clientX, y: event.clientY, offsetX: viewport.offsetX, offsetY: viewport.offsetY };
@@ -185,13 +185,24 @@ function clearFilters() {
 
 function onBoardMouseDown(event: MouseEvent) {
   contextMenu.value = null;
+  const blankTarget = isCanvasBlankTarget(event.target);
+  const shouldPan = event.button === 1 || handActive.value || spaceDown.value;
   if (drawingStore.tool !== "select") {
-    if (!isCanvasControlTarget(event.target)) startDrawing(event);
+    if (!isCanvasControlTarget(event.target) && shouldPan) {
+      startPan(event);
+      return;
+    }
+    if (!isCanvasControlTarget(event.target) && blankTarget && event.button === 0 && (event.shiftKey || event.ctrlKey)) {
+      startBoxSelect(event);
+      return;
+    }
+    if (!isCanvasControlTarget(event.target) && blankTarget) {
+      clearSelectionAfterTinyDrawing.value = Boolean(noteStore.selectedIds.length || drawingStore.selectedIds.length);
+      startDrawing(event);
+    }
     noteStore.clearSelection();
-    drawingStore.clearSelection();
     return;
   }
-  const blankTarget = isCanvasBlankTarget(event.target);
   if (noteStore.editingId && blankTarget) noteStore.stopEditing();
   if (blankTarget) {
     if (event.shiftKey || event.ctrlKey) {
@@ -201,7 +212,7 @@ function onBoardMouseDown(event: MouseEvent) {
       drawingStore.clearSelection();
     }
   }
-  if (!isCanvasControlTarget(event.target) && (blankTarget || event.button === 1 || handActive.value || spaceDown.value)) startPan(event);
+  if (!isCanvasControlTarget(event.target) && (blankTarget || shouldPan)) startPan(event);
 }
 
 function onBoardDoubleClick(event: MouseEvent) {
@@ -262,8 +273,10 @@ function finishDrawing() {
     drawingStore.finishDrawing(drawing.id);
   } else if (drawing) {
     drawingStore.deleteDrawing(drawing.id, false);
+    if (clearSelectionAfterTinyDrawing.value) clearObjectSelection();
   }
   activeDrawingId.value = "";
+  clearSelectionAfterTinyDrawing.value = false;
 }
 
 function isMeaningfulDrawing(drawing: DrawingItem) {
@@ -396,7 +409,7 @@ function clearObjectSelection() {
 }
 
 function startDrawingDrag(event: MouseEvent, drawingId: string) {
-  if (drawingStore.tool !== "select" || event.button !== 0) return;
+  if (event.button !== 0 || handActive.value || spaceDown.value) return;
   const drawing = drawingStore.drawings.find((item) => item.id === drawingId);
   if (!drawing) return;
   event.preventDefault();

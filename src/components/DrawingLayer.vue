@@ -16,14 +16,12 @@ const emit = defineEmits<{
 const drawingStore = useDrawingStore();
 
 function selectDrawing(event: MouseEvent, id: string) {
-  if (drawingStore.tool !== "select") return;
   event.preventDefault();
   event.stopPropagation();
   emit("dragDrawing", event, id);
 }
 
 function openDrawingMenu(event: MouseEvent, id: string) {
-  if (drawingStore.tool !== "select") return;
   event.preventDefault();
   event.stopPropagation();
   if (!drawingStore.selectedIds.includes(id)) drawingStore.select(id);
