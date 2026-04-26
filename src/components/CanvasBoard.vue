@@ -30,11 +30,12 @@ const boardSize = reactive({ width: 0, height: 0 });
 const handActive = ref(false);
 const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
-const contextMenu = ref<{ x: number; y: number; noteId?: string; linkHref?: string; codeText?: string } | null>(null);
+const contextMenu = ref<{ x: number; y: number; noteId?: string; drawingId?: string; linkHref?: string; codeText?: string } | null>(null);
 const contextWorld = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
 const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
+const mixedDrag = ref<{ startX: number; startY: number; beforeNotes: StickyNoteType[]; beforeDrawings: DrawingItem[] } | null>(null);
 const activeDrawingId = ref("");
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
@@ -293,6 +294,16 @@ function openNoteMenu(event: MouseEvent, id: string, payload?: { linkHref?: stri
   contextMenu.value = { x: event.clientX, y: event.clientY, noteId: id, ...payload };
 }
 
+function openDrawingMenu(event: MouseEvent, id: string) {
+  noteStore.clearSelection();
+  if (!drawingStore.selectedIds.includes(id)) drawingStore.select(id);
+  if (board.value) {
+    const rect = board.value.getBoundingClientRect();
+    contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
+  }
+  contextMenu.value = { x: event.clientX, y: event.clientY, drawingId: id };
+}
+
 function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
   const { __before, ...cleanPatch } = patch;
   if (__before) noteStore.commitNoteChange(__before, cleanPatch);
@@ -302,9 +313,14 @@ function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __b
 function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
   if (drawingStore.tool !== "select") return;
   if (handActive.value || spaceDown.value || event.button === 1) return;
-  drawingStore.clearSelection();
   const additive = event.shiftKey || event.ctrlKey;
-  if (!noteStore.selectedIds.includes(note.id)) noteStore.select(note.id, additive);
+  const alreadySelected = noteStore.selectedIds.includes(note.id);
+  if (!additive && !alreadySelected) drawingStore.clearSelection();
+  if (!alreadySelected || additive) noteStore.select(note.id, additive);
+  if (selectedObjectCount() > 1 && noteStore.selectedIds.includes(note.id)) {
+    startMixedDrag(event);
+    return;
+  }
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id)) {
     groupDrag.value = {
       startX: event.clientX,
@@ -314,6 +330,38 @@ function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
     window.addEventListener("mousemove", dragGroup);
     window.addEventListener("mouseup", endGroupDrag, { once: true });
   }
+}
+
+function selectedObjectCount() {
+  return noteStore.selectedIds.length + drawingStore.selectedIds.length;
+}
+
+function startMixedDrag(event: MouseEvent) {
+  mixedDrag.value = {
+    startX: event.clientX,
+    startY: event.clientY,
+    beforeNotes: noteStore.notes.filter((item) => noteStore.selectedIds.includes(item.id)).map((item) => ({ ...item, tags: [...item.tags] })),
+    beforeDrawings: drawingStore.drawings.filter((item) => drawingStore.selectedIds.includes(item.id)).map(cloneDrawing),
+  };
+  window.addEventListener("mousemove", dragMixed);
+  window.addEventListener("mouseup", endMixedDrag, { once: true });
+}
+
+function dragMixed(event: MouseEvent) {
+  if (!mixedDrag.value) return;
+  const deltaX = (event.clientX - mixedDrag.value.startX) / viewport.scale;
+  const deltaY = (event.clientY - mixedDrag.value.startY) / viewport.scale;
+  noteStore.moveSelectedBy(deltaX, deltaY, mixedDrag.value.beforeNotes);
+  drawingStore.moveSelectedBy(deltaX, deltaY, mixedDrag.value.beforeDrawings);
+}
+
+function endMixedDrag() {
+  window.removeEventListener("mousemove", dragMixed);
+  if (mixedDrag.value) {
+    noteStore.commitSelectedMove(mixedDrag.value.beforeNotes);
+    drawingStore.commitSelectedMove(mixedDrag.value.beforeDrawings);
+  }
+  mixedDrag.value = null;
 }
 
 function dragGroup(event: MouseEvent) {
@@ -334,7 +382,17 @@ function deleteSelection(noteId: string) {
 }
 
 function deleteSelectedDrawing() {
-  if (drawingStore.selectedId) drawingStore.deleteDrawing(drawingStore.selectedId);
+  if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
+}
+
+function deleteSelectedObjects() {
+  if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
+  if (noteStore.selectedIds.length) noteStore.deleteSelected();
+}
+
+function clearObjectSelection() {
+  noteStore.clearSelection();
+  drawingStore.clearSelection();
 }
 
 function startDrawingDrag(event: MouseEvent, drawingId: string) {
@@ -343,8 +401,16 @@ function startDrawingDrag(event: MouseEvent, drawingId: string) {
   if (!drawing) return;
   event.preventDefault();
   event.stopPropagation();
-  noteStore.clearSelection();
-  drawingStore.select(drawingId);
+  const alreadySelected = drawingStore.selectedIds.includes(drawingId);
+  const additive = event.shiftKey || event.ctrlKey;
+  if (!alreadySelected) {
+    if (!additive) noteStore.clearSelection();
+    drawingStore.select(drawingId, additive);
+  }
+  if (selectedObjectCount() > 1 && drawingStore.selectedIds.includes(drawingId)) {
+    startMixedDrag(event);
+    return;
+  }
   drawingDrag.value = {
     id: drawingId,
     startX: event.clientX,
@@ -381,7 +447,7 @@ function cloneDrawing(drawing: DrawingItem): DrawingItem {
 }
 
 function undo() {
-  const preferDrawing = Boolean(drawingStore.selectedId || drawingStore.tool !== "select");
+  const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select");
   if (preferDrawing) {
     if (!drawingStore.undo() && noteStore.history.length) noteStore.undo();
     return;
@@ -391,7 +457,7 @@ function undo() {
 }
 
 function redo() {
-  const preferDrawing = Boolean(drawingStore.selectedId || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length));
+  const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length));
   if (preferDrawing) {
     if (!drawingStore.redo() && noteStore.future.length) noteStore.redo();
     return;
@@ -403,6 +469,19 @@ function redo() {
 function duplicateSelection(noteId: string) {
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.duplicateSelected();
   else noteStore.duplicateNote(noteId);
+}
+
+function copySelectedObjects() {
+  if (noteStore.selectedIds.length) noteStore.copySelected();
+  if (drawingStore.selectedIds.length) drawingStore.copySelected();
+}
+
+function duplicateSelectedObjects() {
+  if (noteStore.selectedIds.length) {
+    if (noteStore.selectedIds.length > 1) noteStore.duplicateSelected();
+    else noteStore.duplicateNote(noteStore.selectedIds[0]);
+  }
+  if (drawingStore.selectedIds.length) drawingStore.duplicateSelected();
 }
 
 function jsonNodeText(node: unknown): string {
@@ -471,7 +550,25 @@ function changeColorForContext(noteId: string, color: NoteColor) {
 
 function pasteAtContext() {
   noteStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
+  drawingStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
   contextMenu.value = null;
+}
+
+function changeDrawingColorForContext(color: string) {
+  drawingStore.color = color;
+  if (drawingStore.selectedIds.length) drawingStore.updateSelected({ color });
+  contextMenu.value = null;
+}
+
+function setDrawingColor(color: string) {
+  drawingStore.color = color;
+  if (drawingStore.selectedIds.length) drawingStore.updateSelected({ color });
+}
+
+function setDrawingStrokeWidth(width: number) {
+  const strokeWidth = Math.min(16, Math.max(1, width || 1));
+  drawingStore.strokeWidth = strokeWidth;
+  if (drawingStore.selectedIds.length) drawingStore.updateSelected({ strokeWidth });
 }
 
 function startBoxSelect(event: MouseEvent) {
@@ -494,6 +591,40 @@ function updateBoxSelect(event: MouseEvent) {
   boxSelect.value.currentY = event.clientY - rect.top;
 }
 
+function drawingBounds(drawing: DrawingItem) {
+  if (drawing.type === "pen") {
+    const points = drawing.points ?? [];
+    if (!points.length) return null;
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    return {
+      minX: Math.min(...xs),
+      minY: Math.min(...ys),
+      maxX: Math.max(...xs),
+      maxY: Math.max(...ys),
+    };
+  }
+  if (drawing.type === "arrow" || drawing.type === "line") {
+    if (!drawing.start || !drawing.end) return null;
+    return {
+      minX: Math.min(drawing.start.x, drawing.end.x),
+      minY: Math.min(drawing.start.y, drawing.end.y),
+      maxX: Math.max(drawing.start.x, drawing.end.x),
+      maxY: Math.max(drawing.start.y, drawing.end.y),
+    };
+  }
+  const x = drawing.x ?? 0;
+  const y = drawing.y ?? 0;
+  const width = drawing.width ?? 0;
+  const height = drawing.height ?? 0;
+  return {
+    minX: x,
+    minY: y,
+    maxX: x + width,
+    maxY: y + height,
+  };
+}
+
 function finishBoxSelect() {
   window.removeEventListener("mousemove", updateBoxSelect);
   if (!boxSelect.value) return;
@@ -501,14 +632,24 @@ function finishBoxSelect() {
   const top = Math.min(boxSelect.value.startY, boxSelect.value.currentY);
   const right = Math.max(boxSelect.value.startX, boxSelect.value.currentX);
   const bottom = Math.max(boxSelect.value.startY, boxSelect.value.currentY);
-  const selected = visibleNotes.value.filter((note) => {
+  const selectedNotes = visibleNotes.value.filter((note) => {
     const noteLeft = note.x * viewport.scale + viewport.offsetX;
     const noteTop = note.y * viewport.scale + viewport.offsetY;
     const noteRight = noteLeft + note.width * viewport.scale;
     const noteBottom = noteTop + note.height * viewport.scale;
     return noteRight >= left && noteLeft <= right && noteBottom >= top && noteTop <= bottom;
   });
-  noteStore.setSelection(selected.map((note) => note.id));
+  const selectedDrawings = currentCanvasDrawings.value.filter((drawing) => {
+    const bounds = drawingBounds(drawing);
+    if (!bounds) return false;
+    const drawingLeft = bounds.minX * viewport.scale + viewport.offsetX;
+    const drawingTop = bounds.minY * viewport.scale + viewport.offsetY;
+    const drawingRight = bounds.maxX * viewport.scale + viewport.offsetX;
+    const drawingBottom = bounds.maxY * viewport.scale + viewport.offsetY;
+    return drawingRight >= left && drawingLeft <= right && drawingBottom >= top && drawingTop <= bottom;
+  });
+  noteStore.setSelection(selectedNotes.map((note) => note.id));
+  drawingStore.setSelection(selectedDrawings.map((drawing) => drawing.id));
   boxSelect.value = null;
 }
 
@@ -554,9 +695,37 @@ function onLocateNote(event: Event) {
 
 function onKeydown(event: KeyboardEvent) {
   if (isTextInputTarget(event.target)) return;
-  if ((event.key === "Delete" || event.key === "Backspace") && drawingStore.selectedId) {
+  if (event.ctrlKey && event.key.toLowerCase() === "z") {
     event.preventDefault();
-    deleteSelectedDrawing();
+    undo();
+    return;
+  }
+  if (event.ctrlKey && event.key.toLowerCase() === "y") {
+    event.preventDefault();
+    redo();
+    return;
+  }
+  if (event.ctrlKey && event.key.toLowerCase() === "c" && !noteStore.editingId) {
+    if (noteStore.selectedIds.length || drawingStore.selectedIds.length) {
+      event.preventDefault();
+      copySelectedObjects();
+    }
+    return;
+  }
+  if (event.ctrlKey && event.key.toLowerCase() === "d" && !noteStore.editingId) {
+    if (noteStore.selectedIds.length || drawingStore.selectedIds.length) {
+      event.preventDefault();
+      duplicateSelectedObjects();
+    }
+    return;
+  }
+  if ((event.key === "Delete" || event.key === "Backspace") && (drawingStore.selectedIds.length || noteStore.selectedIds.length) && !noteStore.editingId) {
+    event.preventDefault();
+    deleteSelectedObjects();
+    return;
+  }
+  if (event.key === "Escape") {
+    clearObjectSelection();
     return;
   }
   if (event.code === "Space" && !noteStore.editingId) {
@@ -581,6 +750,7 @@ function onKeydown(event: KeyboardEvent) {
     if (!rect) return;
     const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
     noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
+    drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
   }
 }
 
@@ -599,6 +769,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("mousemove", updateDrawing);
   window.removeEventListener("mousemove", dragDrawing);
+  window.removeEventListener("mousemove", dragMixed);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
   window.removeEventListener("locate-note", onLocateNote);
@@ -668,6 +839,7 @@ watch(
         :drawings="currentCanvasDrawings"
         :scale="viewport.scale"
         @drag-drawing="startDrawingDrag"
+        @context-drawing="openDrawingMenu"
       />
       <StickyNote
         v-for="note in visibleNotes"
@@ -703,7 +875,7 @@ watch(
       :drawing-tool="drawingStore.tool"
       :drawing-color="drawingStore.color"
       :drawing-stroke-width="drawingStore.strokeWidth"
-      :drawing-selected="Boolean(drawingStore.selectedId)"
+      :drawing-selected="Boolean(drawingStore.selectedIds.length)"
       @undo="undo"
       @redo="redo"
       @zoom-in="zoomBy(0.1)"
@@ -712,8 +884,8 @@ watch(
       @reset-zoom="resetZoom"
       @set-hand-active="setHandActive"
       @set-drawing-tool="drawingStore.setTool"
-      @set-drawing-color="(color) => drawingStore.color = color"
-      @set-drawing-stroke-width="(width) => drawingStore.strokeWidth = Math.min(16, Math.max(1, width || 1))"
+      @set-drawing-color="setDrawingColor"
+      @set-drawing-stroke-width="setDrawingStrokeWidth"
       @delete-drawing="deleteSelectedDrawing"
       @settings="settingsStore.togglePanel()"
     />
@@ -760,9 +932,25 @@ watch(
           </div>
         </div>
       </template>
+      <template v-else-if="contextMenu.drawingId">
+        <button @click="copySelectedObjects(); contextMenu = null">复制</button>
+        <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
+        <button @click="deleteSelectedDrawing(); contextMenu = null">删除</button>
+        <div class="context-section">
+          <span>颜色</span>
+          <div class="context-swatches">
+            <button
+              v-for="color in ['#ff0000', '#1f2937', '#2563eb', '#16a34a', '#f59e0b', '#9333ea', '#ec4899', '#64748b']"
+              :key="color"
+              :style="{ backgroundColor: color }"
+              @click="changeDrawingColorForContext(color)"
+            ></button>
+          </div>
+        </div>
+      </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
-        <button :disabled="!noteStore.clipboard.length" @click="pasteAtContext">粘贴便签</button>
+        <button :disabled="!noteStore.clipboard.length && !drawingStore.clipboard.length" @click="pasteAtContext">粘贴</button>
         <button @click="fitView(); contextMenu = null">适应视图</button>
         <button @click="resetZoom(); contextMenu = null">重置缩放</button>
       </template>

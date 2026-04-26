@@ -10,6 +10,7 @@ defineProps<{
 
 const emit = defineEmits<{
   dragDrawing: [event: MouseEvent, drawingId: string];
+  contextDrawing: [event: MouseEvent, drawingId: string];
 }>();
 
 const drawingStore = useDrawingStore();
@@ -18,8 +19,15 @@ function selectDrawing(event: MouseEvent, id: string) {
   if (drawingStore.tool !== "select") return;
   event.preventDefault();
   event.stopPropagation();
-  drawingStore.select(id);
   emit("dragDrawing", event, id);
+}
+
+function openDrawingMenu(event: MouseEvent, id: string) {
+  if (drawingStore.tool !== "select") return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (!drawingStore.selectedIds.includes(id)) drawingStore.select(id);
+  emit("contextDrawing", event, id);
 }
 
 function smoothPenPath(drawing: DrawingItem) {
@@ -245,7 +253,12 @@ function rectFor(drawing: DrawingItem) {
       </filter>
     </defs>
 
-    <g v-for="drawing in drawings" :key="drawing.id" :class="{ selected: drawingStore.selectedId === drawing.id, 'arrow-drawing': drawing.type === 'arrow' }">
+    <g
+      v-for="drawing in drawings"
+      :key="drawing.id"
+      :class="{ selected: drawingStore.selectedIds.includes(drawing.id), 'arrow-drawing': drawing.type === 'arrow' }"
+      @contextmenu="openDrawingMenu($event, drawing.id)"
+    >
       <path
         v-if="drawing.type === 'pen'"
         class="drawing-stroke"
@@ -261,7 +274,7 @@ function rectFor(drawing: DrawingItem) {
         v-else-if="drawing.type === 'arrow'"
         @mousedown="selectDrawing($event, drawing.id)"
       >
-        <template v-if="drawingStore.selectedId === drawing.id">
+        <template v-if="drawingStore.selectedIds.includes(drawing.id)">
           <path
             class="selection-glow"
             :d="arrowGeometry(drawing).main"

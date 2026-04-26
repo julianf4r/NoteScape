@@ -32,6 +32,24 @@ function moveDrawingFrom(before: DrawingItem, deltaX: number, deltaY: number): P
   };
 }
 
+function drawingBounds(drawing: DrawingItem) {
+  if (drawing.type === "pen") {
+    const points = drawing.points ?? [];
+    if (!points.length) return null;
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    return { minX: Math.min(...xs), minY: Math.min(...ys) };
+  }
+  if (drawing.type === "arrow" || drawing.type === "line") {
+    if (!drawing.start || !drawing.end) return null;
+    return {
+      minX: Math.min(drawing.start.x, drawing.end.x),
+      minY: Math.min(drawing.start.y, drawing.end.y),
+    };
+  }
+  return { minX: drawing.x ?? 0, minY: drawing.y ?? 0 };
+}
+
 const hasMeaningfulChange = (before: DrawingItem, after: DrawingItem) =>
   JSON.stringify({ ...before, updatedAt: undefined }) !== JSON.stringify({ ...after, updatedAt: undefined });
 
@@ -39,6 +57,8 @@ export const useDrawingStore = defineStore("drawing", {
   state: () => ({
     drawings: [] as DrawingItem[],
     selectedId: "",
+    selectedIds: [] as string[],
+    clipboard: [] as DrawingItem[],
     tool: "select" as DrawingTool,
     color: "#ff0000",
     strokeWidth: 8,
@@ -52,6 +72,7 @@ export const useDrawingStore = defineStore("drawing", {
     setDrawings(drawings: DrawingItem[]) {
       this.drawings = drawings;
       this.selectedId = "";
+      this.selectedIds = [];
       this.history = [];
       this.future = [];
     },
@@ -60,7 +81,7 @@ export const useDrawingStore = defineStore("drawing", {
     },
     setTool(tool: DrawingTool) {
       this.tool = tool;
-      if (tool !== "select") this.selectedId = "";
+      if (tool !== "select") this.clearSelection();
     },
     createDrawing(canvasId: string, patch: Partial<DrawingItem>) {
       const drawing: DrawingItem = {
@@ -88,30 +109,100 @@ export const useDrawingStore = defineStore("drawing", {
       Object.assign(drawing, patch, { updatedAt: now() });
       if (persist) saveDrawingSafely(drawing);
     },
+    updateSelected(patch: Partial<DrawingItem>) {
+      this.selectedIds.forEach((id) => {
+        const drawing = this.drawings.find((item) => item.id === id);
+        if (!drawing) return;
+        const before = cloneDrawing(drawing);
+        Object.assign(drawing, patch, { updatedAt: now() });
+        if (hasMeaningfulChange(before, drawing)) this.addHistory({ type: "update", before, after: cloneDrawing(drawing) });
+        saveDrawingSafely(drawing);
+      });
+    },
     finishDrawing(id: string) {
       const drawing = this.drawings.find((item) => item.id === id);
       if (!drawing) return;
       this.addHistory({ type: "create", after: cloneDrawing(drawing) });
-      this.selectedId = drawing.id;
+      this.setSelection([drawing.id]);
       saveDrawingSafely(drawing);
     },
-    select(id: string) {
-      this.selectedId = id;
+    select(id: string, additive = false) {
+      if (!additive) {
+        this.setSelection([id]);
+        return;
+      }
+      this.setSelection(this.selectedIds.includes(id)
+        ? this.selectedIds.filter((item) => item !== id)
+        : [...this.selectedIds, id]);
+    },
+    setSelection(ids: string[]) {
+      this.selectedIds = Array.from(new Set(ids)).filter((id) => this.drawings.some((drawing) => drawing.id === id));
+      this.selectedId = this.selectedIds[0] ?? "";
     },
     clearSelection() {
       this.selectedId = "";
+      this.selectedIds = [];
     },
     deleteDrawing(id: string, track = true) {
       const drawing = this.drawings.find((item) => item.id === id);
       if (!drawing) return;
       this.drawings = this.drawings.filter((drawing) => drawing.id !== id);
-      if (this.selectedId === id) this.selectedId = "";
+      if (this.selectedIds.includes(id)) this.setSelection(this.selectedIds.filter((item) => item !== id));
       if (track) this.addHistory({ type: "delete", before: cloneDrawing(drawing) });
       deleteDrawingSafely(id);
     },
+    deleteSelected() {
+      [...this.selectedIds].forEach((id) => this.deleteDrawing(id));
+    },
+    copySelected() {
+      this.clipboard = this.drawings
+        .filter((drawing) => this.selectedIds.includes(drawing.id))
+        .map(cloneDrawing);
+    },
+    duplicateSelected() {
+      if (!this.selectedIds.length) return;
+      const copies = this.drawings
+        .filter((drawing) => this.selectedIds.includes(drawing.id))
+        .map((drawing, index) => ({
+          ...cloneDrawing(drawing),
+          ...moveDrawingFrom(drawing, 28 + index * 8, 28 + index * 8),
+          id: nanoid(),
+          zIndex: this.maxZ + index + 1,
+          createdAt: now(),
+          updatedAt: now(),
+        }));
+      this.drawings.push(...copies);
+      this.setSelection(copies.map((drawing) => drawing.id));
+      copies.forEach((drawing) => {
+        this.addHistory({ type: "create", after: cloneDrawing(drawing) });
+        saveDrawingSafely(drawing);
+      });
+    },
+    pasteClipboard(canvasId: string, x: number, y: number) {
+      if (!this.clipboard.length) return;
+      const bounds = this.clipboard.map(drawingBounds).filter(Boolean) as Array<{ minX: number; minY: number }>;
+      if (!bounds.length) return;
+      const minX = Math.min(...bounds.map((bound) => bound.minX));
+      const minY = Math.min(...bounds.map((bound) => bound.minY));
+      const copies = this.clipboard.map((drawing, index) => ({
+        ...cloneDrawing(drawing),
+        ...moveDrawingFrom(drawing, x - minX + index * 8, y - minY + index * 8),
+        id: nanoid(),
+        canvasId,
+        zIndex: this.maxZ + index + 1,
+        createdAt: now(),
+        updatedAt: now(),
+      }));
+      this.drawings.push(...copies);
+      this.setSelection(copies.map((drawing) => drawing.id));
+      copies.forEach((drawing) => {
+        this.addHistory({ type: "create", after: cloneDrawing(drawing) });
+        saveDrawingSafely(drawing);
+      });
+    },
     removeDrawingsByCanvas(canvasId: string) {
       this.drawings = this.drawings.filter((drawing) => drawing.canvasId !== canvasId);
-      if (this.selectedId && !this.drawings.some((drawing) => drawing.id === this.selectedId)) this.selectedId = "";
+      this.setSelection(this.selectedIds);
       void deleteDrawingsByCanvasData(canvasId).catch((error) => reportPersistenceError("删除画布绘图", error));
     },
     appendPoint(id: string, point: DrawingPoint) {
@@ -125,30 +216,36 @@ export const useDrawingStore = defineStore("drawing", {
       if (!drawing) return;
       Object.assign(drawing, moveDrawingFrom(before, deltaX, deltaY), { updatedAt: now() });
     },
+    moveSelectedBy(deltaX: number, deltaY: number, beforeDrawings: DrawingItem[]) {
+      beforeDrawings.forEach((before) => this.moveDrawingLive(before.id, before, deltaX, deltaY));
+    },
     commitDrawingMove(before: DrawingItem) {
       const drawing = this.drawings.find((item) => item.id === before.id);
       if (!drawing) return;
       if (hasMeaningfulChange(before, drawing)) this.addHistory({ type: "update", before: cloneDrawing(before), after: cloneDrawing(drawing) });
       saveDrawingSafely(drawing);
     },
+    commitSelectedMove(beforeDrawings: DrawingItem[]) {
+      beforeDrawings.forEach((before) => this.commitDrawingMove(before));
+    },
     undo() {
       const entry = this.history.pop();
       if (!entry) return false;
       if (entry.type === "create" && entry.after) {
         this.drawings = this.drawings.filter((drawing) => drawing.id !== entry.after?.id);
-        if (this.selectedId === entry.after.id) this.selectedId = "";
+        if (this.selectedIds.includes(entry.after.id)) this.setSelection(this.selectedIds.filter((id) => id !== entry.after?.id));
         deleteDrawingSafely(entry.after.id);
       }
       if (entry.type === "delete" && entry.before) {
         this.drawings.push(cloneDrawing(entry.before));
-        this.selectedId = entry.before.id;
+        this.setSelection([entry.before.id]);
         saveDrawingSafely(entry.before);
       }
       if (entry.type === "update" && entry.before) {
         const index = this.drawings.findIndex((drawing) => drawing.id === entry.before?.id);
         if (index >= 0) {
           this.drawings[index] = cloneDrawing(entry.before);
-          this.selectedId = entry.before.id;
+          this.setSelection([entry.before.id]);
           saveDrawingSafely(entry.before);
         }
       }
@@ -160,19 +257,19 @@ export const useDrawingStore = defineStore("drawing", {
       if (!entry) return false;
       if (entry.type === "create" && entry.after) {
         this.drawings.push(cloneDrawing(entry.after));
-        this.selectedId = entry.after.id;
+        this.setSelection([entry.after.id]);
         saveDrawingSafely(entry.after);
       }
       if (entry.type === "delete" && entry.before) {
         this.drawings = this.drawings.filter((drawing) => drawing.id !== entry.before?.id);
-        if (this.selectedId === entry.before.id) this.selectedId = "";
+        if (this.selectedIds.includes(entry.before.id)) this.setSelection(this.selectedIds.filter((id) => id !== entry.before?.id));
         deleteDrawingSafely(entry.before.id);
       }
       if (entry.type === "update" && entry.after) {
         const index = this.drawings.findIndex((drawing) => drawing.id === entry.after?.id);
         if (index >= 0) {
           this.drawings[index] = cloneDrawing(entry.after);
-          this.selectedId = entry.after.id;
+          this.setSelection([entry.after.id]);
           saveDrawingSafely(entry.after);
         }
       }

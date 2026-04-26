@@ -26,8 +26,6 @@ function isTextInputTarget(target: EventTarget | null) {
 }
 
 function onKeydown(event: KeyboardEvent) {
-  const selected = noteStore.selectedIds[0];
-  const isEditing = Boolean(noteStore.editingId);
   const textInputTarget = isTextInputTarget(event.target);
   if (textInputTarget && !(event.ctrlKey && event.key.toLowerCase() === "s") && event.key !== "Escape") return;
   if (event.ctrlKey && event.key.toLowerCase() === "f") {
@@ -38,33 +36,9 @@ function onKeydown(event: KeyboardEvent) {
     event.preventDefault();
     appStore.persist(true);
   }
-  if (event.ctrlKey && event.key.toLowerCase() === "z") {
-    event.preventDefault();
-    noteStore.undo();
-  }
-  if (event.ctrlKey && event.key.toLowerCase() === "y") {
-    event.preventDefault();
-    noteStore.redo();
-  }
-  if (event.ctrlKey && event.key.toLowerCase() === "d" && selected) {
-    event.preventDefault();
-    if (noteStore.selectedIds.length > 1) noteStore.duplicateSelected();
-    else noteStore.duplicateNote(selected);
-  }
-  if (event.ctrlKey && event.key.toLowerCase() === "c" && selected && !isEditing) {
-    event.preventDefault();
-    noteStore.copySelected();
-  }
   if (event.ctrlKey && event.key.toLowerCase() === "n" && canvasStore.currentCanvasId) {
     event.preventDefault();
     noteStore.createNote(canvasStore.currentCanvasId, 360, 260, settingsStore.settings.defaultFontSize, settingsStore.settings.randomRotation);
-  }
-  if (event.key === "Delete" && selected && !isEditing) {
-    if (noteStore.selectedIds.length > 1) noteStore.deleteSelected();
-    else noteStore.deleteNote(selected);
-  }
-  if (event.key === "Escape") {
-    noteStore.clearSelection();
   }
 }
 
