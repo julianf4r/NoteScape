@@ -101,8 +101,8 @@ pub(crate) fn save_structured_data(
 
     for tag in &app_data.tags {
         tx.execute(
-            "INSERT INTO tags (id, name, color, count, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![tag.id, tag.name, tag.color, 0, tag.created_at],
+            "INSERT INTO tags (id, name, color, count, sort_order, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![tag.id, tag.name, tag.color, 0, tag.sort_order, tag.created_at],
         )
         .map_err(|error| error.to_string())?;
     }
@@ -219,12 +219,13 @@ pub(crate) fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<()
 
 pub(crate) fn upsert_tag(conn: &Connection, tag: &TagItem) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO tags (id, name, color, count, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)
+        "INSERT INTO tags (id, name, color, count, sort_order, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
-            color = excluded.color",
-        params![tag.id, tag.name, tag.color, 0, tag.created_at],
+            color = excluded.color,
+            sort_order = excluded.sort_order",
+        params![tag.id, tag.name, tag.color, 0, tag.sort_order, tag.created_at],
     )
     .map_err(|error| error.to_string())?;
     Ok(())

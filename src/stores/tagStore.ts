@@ -12,17 +12,20 @@ export const useTagStore = defineStore("tag", {
   }),
   getters: {
     activeTag: (state) => state.tags.find((tag) => tag.id === state.activeTagId),
+    orderedTags: (state) => [...state.tags].sort(compareTagOrder),
   },
   actions: {
     setTags(tags: TagItem[]) {
-      this.tags = tags;
+      this.tags = normalizeTagOrder(tags);
     },
     createTag(name = "新标签") {
+      const bottomOrder = Math.max(-1, ...this.orderedTags.map((tag) => tag.sortOrder)) + 1;
       const tag = {
         id: nanoid(),
         name,
         color: palette[this.tags.length % palette.length],
         count: 0,
+        sortOrder: bottomOrder,
         createdAt: new Date().toISOString(),
       };
       this.tags.push(tag);
@@ -56,5 +59,37 @@ export const useTagStore = defineStore("tag", {
         tag.count = noteTags.filter((id) => id === tag.id).length;
       });
     },
+    moveTag(id: string, direction: -1 | 1) {
+      const ordered = this.orderedTags;
+      const index = ordered.findIndex((tag) => tag.id === id);
+      const targetIndex = index + direction;
+      if (index < 0 || targetIndex < 0 || targetIndex >= ordered.length) return;
+      const reordered = [...ordered];
+      const [tag] = reordered.splice(index, 1);
+      reordered.splice(targetIndex, 0, tag);
+      reordered.forEach((item, order) => {
+        item.sortOrder = order;
+      });
+      this.tags = reordered;
+      reordered.forEach((item) => {
+        void saveTagData(item).catch((error) => reportPersistenceError("保存标签顺序", error));
+      });
+    },
   },
 });
+
+function compareTagOrder(a: TagItem, b: TagItem) {
+  return tagSortOrder(a) - tagSortOrder(b) || a.createdAt.localeCompare(b.createdAt);
+}
+
+function normalizeTagOrder(tags: TagItem[]) {
+  const ordered = [...tags].sort(compareTagOrder);
+  ordered.forEach((tag, index) => {
+    if (!Number.isFinite(tag.sortOrder)) tag.sortOrder = index;
+  });
+  return ordered;
+}
+
+function tagSortOrder(tag: TagItem) {
+  return Number.isFinite(tag.sortOrder) ? tag.sortOrder : Number.MAX_SAFE_INTEGER;
+}

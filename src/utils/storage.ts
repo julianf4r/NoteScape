@@ -34,6 +34,7 @@ export function parseData(raw: string): AppData {
   parsed.settings = normalizeSettings(parsed.settings);
   parsed.drawings = Array.isArray(parsed.drawings) ? parsed.drawings : [];
   parsed.canvases = normalizeCanvases(parsed.canvases);
+  parsed.tags = normalizeTags(Array.isArray(parsed.tags) ? parsed.tags : []);
   return parsed;
 }
 
@@ -42,6 +43,15 @@ function normalizeCanvases(canvases: CanvasItem[]): CanvasItem[] {
     .map((canvas, index) => ({
       ...canvas,
       sortOrder: Number.isFinite(canvas.sortOrder) ? canvas.sortOrder : index,
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
+}
+
+function normalizeTags(tags: TagItem[]): TagItem[] {
+  return tags
+    .map((tag, index) => ({
+      ...tag,
+      sortOrder: Number.isFinite(tag.sortOrder) ? tag.sortOrder : index,
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
 }

@@ -110,6 +110,8 @@ pub(crate) struct TagItem {
     pub(crate) name: String,
     pub(crate) color: String,
     pub(crate) count: i64,
+    #[serde(default)]
+    pub(crate) sort_order: i64,
     pub(crate) created_at: String,
 }
 

@@ -26,6 +26,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             name TEXT NOT NULL,
             color TEXT NOT NULL,
             count INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         );
 
@@ -92,6 +93,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     add_column_if_missing(conn, "notes", "content_json", "TEXT")?;
     add_column_if_missing(conn, "notes", "decoration", "TEXT")?;
     add_column_if_missing(conn, "notes", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(conn, "tags", "sort_order", "INTEGER NOT NULL DEFAULT 0")?;
     Ok(())
 }
 

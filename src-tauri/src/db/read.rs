@@ -193,11 +193,11 @@ fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
 fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
     let mut statement = conn
         .prepare(
-            "SELECT tags.id, tags.name, tags.color, COUNT(note_tags.note_id), tags.created_at
+            "SELECT tags.id, tags.name, tags.color, COUNT(note_tags.note_id), tags.sort_order, tags.created_at
              FROM tags
              LEFT JOIN note_tags ON note_tags.tag_id = tags.id
-             GROUP BY tags.id, tags.name, tags.color, tags.created_at
-             ORDER BY tags.created_at ASC",
+             GROUP BY tags.id, tags.name, tags.color, tags.sort_order, tags.created_at
+             ORDER BY tags.sort_order ASC, tags.created_at ASC",
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -207,7 +207,8 @@ fn load_tags(conn: &Connection) -> Result<Vec<TagItem>, String> {
                 name: row.get(1)?,
                 color: row.get(2)?,
                 count: row.get(3)?,
-                created_at: row.get(4)?,
+                sort_order: row.get::<_, f64>(4)? as i64,
+                created_at: row.get(5)?,
             })
         })
         .map_err(|error| error.to_string())?;

@@ -81,6 +81,7 @@ export interface TagItem {
   name: string;
   color: string;
   count: number;
+  sortOrder: number;
   createdAt: string;
 }
 

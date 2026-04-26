@@ -59,6 +59,19 @@ const hasSearchResults = computed(
   () => Boolean(canvasStore.searchQuery.trim()) && (searchResults.value.canvases.length > 0 || searchResults.value.notes.length > 0 || searchResults.value.tags.length > 0),
 );
 
+function tagIndex(id: string) {
+  return tagStore.orderedTags.findIndex((tag) => tag.id === id);
+}
+
+function canMoveTagUp(id: string) {
+  return tagIndex(id) > 0;
+}
+
+function canMoveTagDown(id: string) {
+  const index = tagIndex(id);
+  return index >= 0 && index < tagStore.orderedTags.length - 1;
+}
+
 function createCanvas() {
   if (!appStore.databaseReady) {
     feedback.notify(appStore.loadError || "数据库未加载", "error");
@@ -293,7 +306,7 @@ function selectSearchCanvas(id: string) {
         <button class="small-add" :disabled="!appStore.databaseReady" @click="createTag"><Plus :size="18" /></button>
       </div>
       <button
-        v-for="tag in tagStore.tags"
+        v-for="tag in tagStore.orderedTags"
         :key="tag.id"
         class="tag-row"
         :class="{ active: tag.id === tagStore.activeTagId }"
@@ -323,6 +336,8 @@ function selectSearchCanvas(id: string) {
         <span v-else>{{ tag.name }}</span>
         <b>{{ tag.count }}</b>
         <span class="tag-actions">
+          <button title="上移" :disabled="!canMoveTagUp(tag.id)" @click.stop="tagStore.moveTag(tag.id, -1)"><ArrowUp :size="14" /></button>
+          <button title="下移" :disabled="!canMoveTagDown(tag.id)" @click.stop="tagStore.moveTag(tag.id, 1)"><ArrowDown :size="14" /></button>
           <button title="重命名" @click.stop="startRenameTag(tag.id, tag.name, tag.color)"><Pencil :size="14" /></button>
           <button title="删除" @click.stop="deleteTag(tag.id, tag.name)"><Trash2 :size="14" /></button>
         </span>
@@ -591,6 +606,11 @@ function selectSearchCanvas(id: string) {
 }
 
 .row-actions button:disabled {
+  cursor: default;
+  opacity: 0.34;
+}
+
+.tag-actions button:disabled {
   cursor: default;
   opacity: 0.34;
 }
