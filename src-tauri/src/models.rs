@@ -26,6 +26,8 @@ pub(crate) struct CanvasItem {
     pub(crate) description: Option<String>,
     pub(crate) created_at: String,
     pub(crate) updated_at: String,
+    #[serde(default)]
+    pub(crate) sort_order: i64,
     pub(crate) deleted_at: Option<String>,
     pub(crate) viewport: Option<ViewportState>,
 }

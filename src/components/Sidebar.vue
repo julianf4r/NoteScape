@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
-import { Archive, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
+import { Archive, ArrowDown, ArrowUp, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
 import SearchBox from "./SearchBox.vue";
 import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
@@ -31,6 +31,19 @@ const hasSearchQuery = computed(() => Boolean(canvasStore.searchQuery.trim()));
 const filteredCanvases = computed(() => {
   return canvasStore.activeCanvases;
 });
+
+function canvasIndex(id: string) {
+  return filteredCanvases.value.findIndex((canvas) => canvas.id === id);
+}
+
+function canMoveCanvasUp(id: string) {
+  return canvasIndex(id) > 0;
+}
+
+function canMoveCanvasDown(id: string) {
+  const index = canvasIndex(id);
+  return index >= 0 && index < filteredCanvases.value.length - 1;
+}
 
 const searchResults = computed(() => {
   const query = canvasStore.searchQuery.trim().toLowerCase();
@@ -250,6 +263,8 @@ function selectSearchCanvas(id: string) {
         />
         <span v-else class="name">{{ canvas.name }}</span>
         <span class="row-actions">
+          <button title="上移" :disabled="!canMoveCanvasUp(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, -1)"><ArrowUp :size="14" /></button>
+          <button title="下移" :disabled="!canMoveCanvasDown(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, 1)"><ArrowDown :size="14" /></button>
           <button title="重命名" @click.stop="startRename(canvas.id, canvas.name)"><Pencil :size="14" /></button>
           <button title="删除" @click.stop="deleteCanvas(canvas.id, canvas.name)"><Trash2 :size="14" /></button>
         </span>
@@ -573,6 +588,11 @@ function selectSearchCanvas(id: string) {
 .tag-actions button:hover {
   color: #1f2937;
   background: #fff;
+}
+
+.row-actions button:disabled {
+  cursor: default;
+  opacity: 0.34;
 }
 
 .trash {

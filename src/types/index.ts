@@ -71,6 +71,7 @@ export interface CanvasItem {
   description?: string;
   createdAt: string;
   updatedAt: string;
+  sortOrder: number;
   deletedAt?: string | null;
   viewport?: ViewportState;
 }

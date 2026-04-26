@@ -18,6 +18,7 @@ pub(crate) fn default_app_data() -> AppData {
             description: None,
             created_at: created_at.clone(),
             updated_at: created_at.clone(),
+            sort_order: 0,
             deleted_at: None,
             viewport: None,
         }],

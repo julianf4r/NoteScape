@@ -14,6 +14,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             description TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
             deleted_at TEXT,
             viewport_offset_x REAL,
             viewport_offset_y REAL,
@@ -87,6 +88,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     add_column_if_missing(conn, "canvases", "viewport_offset_x", "REAL")?;
     add_column_if_missing(conn, "canvases", "viewport_offset_y", "REAL")?;
     add_column_if_missing(conn, "canvases", "viewport_scale", "REAL")?;
+    add_column_if_missing(conn, "canvases", "sort_order", "INTEGER NOT NULL DEFAULT 0")?;
     add_column_if_missing(conn, "notes", "content_json", "TEXT")?;
     add_column_if_missing(conn, "notes", "decoration", "TEXT")?;
     add_column_if_missing(conn, "notes", "pinned", "INTEGER NOT NULL DEFAULT 0")?;

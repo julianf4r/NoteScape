@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import type { AppData } from "../types";
-import { createDatabase, loadData, normalizeSettings, parseData, resetDatabaseToDefault, saveData, switchDatabase } from "../utils/storage";
+import { createDatabase, loadData, parseData, resetDatabaseToDefault, saveData, switchDatabase } from "../utils/storage";
 import { useCanvasStore } from "./canvasStore";
 import { useNoteStore } from "./noteStore";
 import { useSettingsStore } from "./settingsStore";
@@ -76,9 +76,7 @@ export const useAppStore = defineStore("app", {
       return JSON.stringify(this.snapshot(), null, 2);
     },
     async importData(raw: string) {
-      const data = JSON.parse(raw) as AppData;
-      if (!Array.isArray(data.canvases) || !Array.isArray(data.notes)) throw new Error("数据格式不正确");
-      data.settings = normalizeSettings(data.settings);
+      const data = parseData(raw);
       this.applyData(data);
       const saved = await this.persist(true);
       if (!saved) throw new Error(this.statusMessage || "保存失败");

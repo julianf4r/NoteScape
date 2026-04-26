@@ -156,9 +156,9 @@ fn meta_bool(conn: &Connection, key: &str, fallback: bool) -> Result<bool, Strin
 fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
     let mut statement = conn
         .prepare(
-            "SELECT id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale
+            "SELECT id, name, description, created_at, updated_at, sort_order, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale
              FROM canvases
-             ORDER BY created_at ASC",
+             ORDER BY sort_order ASC, created_at ASC",
         )
         .map_err(|error| error.to_string())?;
     let rows = statement
@@ -169,11 +169,12 @@ fn load_canvases(conn: &Connection) -> Result<Vec<CanvasItem>, String> {
                 description: row.get(2)?,
                 created_at: row.get(3)?,
                 updated_at: row.get(4)?,
-                deleted_at: row.get(5)?,
+                sort_order: row.get::<_, f64>(5)? as i64,
+                deleted_at: row.get(6)?,
                 viewport: match (
-                    row.get::<_, Option<f64>>(6)?,
                     row.get::<_, Option<f64>>(7)?,
                     row.get::<_, Option<f64>>(8)?,
+                    row.get::<_, Option<f64>>(9)?,
                 ) {
                     (Some(offset_x), Some(offset_y), Some(scale)) => Some(ViewportState {
                         offset_x,

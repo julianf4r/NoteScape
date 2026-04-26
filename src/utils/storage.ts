@@ -33,7 +33,17 @@ export function parseData(raw: string): AppData {
   }
   parsed.settings = normalizeSettings(parsed.settings);
   parsed.drawings = Array.isArray(parsed.drawings) ? parsed.drawings : [];
+  parsed.canvases = normalizeCanvases(parsed.canvases);
   return parsed;
+}
+
+function normalizeCanvases(canvases: CanvasItem[]): CanvasItem[] {
+  return canvases
+    .map((canvas, index) => ({
+      ...canvas,
+      sortOrder: Number.isFinite(canvas.sortOrder) ? canvas.sortOrder : index,
+    }))
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
 }
 
 export async function loadData(): Promise<DatabaseLoadResult> {

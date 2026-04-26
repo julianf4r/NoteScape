@@ -81,14 +81,15 @@ pub(crate) fn save_structured_data(
 
     for canvas in &app_data.canvases {
         tx.execute(
-            "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO canvases (id, name, description, created_at, updated_at, sort_order, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 canvas.id,
                 canvas.name,
                 canvas.description,
                 canvas.created_at,
                 canvas.updated_at,
+                canvas.sort_order,
                 canvas.deleted_at,
                 canvas.viewport.as_ref().map(|viewport| viewport.offset_x),
                 canvas.viewport.as_ref().map(|viewport| viewport.offset_y),
@@ -188,12 +189,13 @@ fn insert_drawing(conn: &Connection, drawing: &DrawingItem) -> Result<(), String
 
 pub(crate) fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<(), String> {
     conn.execute(
-        "INSERT INTO canvases (id, name, description, created_at, updated_at, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+        "INSERT INTO canvases (id, name, description, created_at, updated_at, sort_order, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
          ON CONFLICT(id) DO UPDATE SET
             name = excluded.name,
             description = excluded.description,
             updated_at = excluded.updated_at,
+            sort_order = excluded.sort_order,
             deleted_at = excluded.deleted_at,
             viewport_offset_x = excluded.viewport_offset_x,
             viewport_offset_y = excluded.viewport_offset_y,
@@ -204,6 +206,7 @@ pub(crate) fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<()
             canvas.description,
             canvas.created_at,
             canvas.updated_at,
+            canvas.sort_order,
             canvas.deleted_at,
             canvas.viewport.as_ref().map(|viewport| viewport.offset_x),
             canvas.viewport.as_ref().map(|viewport| viewport.offset_y),

@@ -13,21 +13,23 @@ export const useCanvasStore = defineStore("canvas", {
     searchQuery: "",
   }),
   getters: {
-    activeCanvases: (state) => state.canvases.filter((canvas) => !canvas.deletedAt),
-    deletedCanvases: (state) => state.canvases.filter((canvas) => canvas.deletedAt),
+    activeCanvases: (state) => state.canvases.filter((canvas) => !canvas.deletedAt).sort(compareCanvasOrder),
+    deletedCanvases: (state) => state.canvases.filter((canvas) => canvas.deletedAt).sort(compareCanvasOrder),
     currentCanvas: (state) => state.canvases.find((canvas) => canvas.id === state.currentCanvasId),
   },
   actions: {
     setCanvases(canvases: CanvasItem[]) {
-      this.canvases = canvases;
-      this.currentCanvasId = canvases.find((canvas) => !canvas.deletedAt)?.id ?? "";
+      this.canvases = normalizeCanvasOrder(canvases);
+      this.currentCanvasId = this.activeCanvases[0]?.id ?? "";
     },
     createCanvas(name = "新画布") {
+      const topOrder = Math.min(0, ...this.activeCanvases.map((canvas) => canvas.sortOrder)) - 1;
       const canvas: CanvasItem = {
         id: nanoid(),
         name,
         createdAt: now(),
         updatedAt: now(),
+        sortOrder: topOrder,
         deletedAt: null,
       };
       this.canvases.unshift(canvas);
@@ -75,5 +77,40 @@ export const useCanvasStore = defineStore("canvas", {
       canvas.viewport = { ...viewport };
       void saveCanvasData(canvas).catch((error) => reportPersistenceError("保存视口", error));
     },
+    moveCanvas(id: string, direction: -1 | 1) {
+      const active = this.activeCanvases;
+      const index = active.findIndex((canvas) => canvas.id === id);
+      const targetIndex = index + direction;
+      if (index < 0 || targetIndex < 0 || targetIndex >= active.length) return;
+      const reordered = [...active];
+      const [canvas] = reordered.splice(index, 1);
+      reordered.splice(targetIndex, 0, canvas);
+      reordered.forEach((item, order) => {
+        item.sortOrder = order;
+      });
+      this.canvases = [
+        ...reordered,
+        ...this.deletedCanvases,
+      ];
+      reordered.forEach((item) => {
+        void saveCanvasData(item).catch((error) => reportPersistenceError("保存画布顺序", error));
+      });
+    },
   },
 });
+
+function compareCanvasOrder(a: CanvasItem, b: CanvasItem) {
+  return canvasSortOrder(a) - canvasSortOrder(b) || a.createdAt.localeCompare(b.createdAt);
+}
+
+function normalizeCanvasOrder(canvases: CanvasItem[]) {
+  const ordered = [...canvases].sort(compareCanvasOrder);
+  ordered.forEach((canvas, index) => {
+    if (!Number.isFinite(canvas.sortOrder)) canvas.sortOrder = index;
+  });
+  return ordered;
+}
+
+function canvasSortOrder(canvas: CanvasItem) {
+  return Number.isFinite(canvas.sortOrder) ? canvas.sortOrder : Number.MAX_SAFE_INTEGER;
+}
