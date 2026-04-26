@@ -110,7 +110,7 @@ const editor = useEditor({
         if (props.editing) saveEdit();
         return false;
       },
-      keydown: (_view, event) => blockLimitedInput(event as KeyboardEvent),
+      keydown: (_view, event) => handleEditorKeydown(event as KeyboardEvent),
       beforeinput: (_view, event) => blockLimitedBeforeInput(event as InputEvent),
       paste: (_view, event) => blockLimitedPaste(event as ClipboardEvent),
     },
@@ -146,7 +146,7 @@ const style = computed(() => ({
   height: `${props.note.height}px`,
   zIndex: (props.note.pinned ? 100000 : 0) + props.note.zIndex,
   backgroundColor: noteColors[props.note.color],
-  transform: props.editing ? "rotate(0deg)" : `rotate(${props.note.rotation}deg)`,
+  transform: props.editing ? "none" : `rotate(${props.note.rotation}deg)`,
 }));
 
 const contentStyle = computed(() => ({
@@ -284,6 +284,17 @@ function blockLimitedInput(event: KeyboardEvent) {
   event.preventDefault();
   notifyHeightLimited();
   return true;
+}
+
+function handleEditorKeydown(event: KeyboardEvent) {
+  if (props.editing && event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    event.preventDefault();
+    event.stopPropagation();
+    editor.value?.chain().focus().insertContent("\t").run();
+    scheduleAutoGrow();
+    return true;
+  }
+  return blockLimitedInput(event);
 }
 
 function blockLimitedBeforeInput(event: InputEvent) {
@@ -563,6 +574,7 @@ mark {
   min-height: 100%;
   outline: 0;
   white-space: pre-wrap;
+  tab-size: 4;
   line-height: 1.55;
 }
 
