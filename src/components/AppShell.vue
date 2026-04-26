@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import CanvasBoard from "./CanvasBoard.vue";
+import ConfirmHost from "./ConfirmHost.vue";
 import SettingsPanel from "./SettingsPanel.vue";
 import Sidebar from "./Sidebar.vue";
 import ToastHost from "./ToastHost.vue";
@@ -76,6 +77,7 @@ watch(
     <Transition name="settings-drawer">
       <SettingsPanel v-if="settingsStore.panelOpen" />
     </Transition>
+    <ConfirmHost />
     <ToastHost />
   </div>
 </template>

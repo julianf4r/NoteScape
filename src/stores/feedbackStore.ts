@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
-import { confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
 
 export interface ToastItem {
   id: string;
@@ -8,9 +7,16 @@ export interface ToastItem {
   message: string;
 }
 
+export interface ConfirmRequest {
+  id: string;
+  message: string;
+  resolve: (confirmed: boolean) => void;
+}
+
 export const useFeedbackStore = defineStore("feedback", {
   state: () => ({
     toasts: [] as ToastItem[],
+    confirmRequest: null as ConfirmRequest | null,
   }),
   actions: {
     notify(message: string, type: ToastItem["type"] = "info") {
@@ -22,7 +28,20 @@ export const useFeedbackStore = defineStore("feedback", {
       this.toasts = this.toasts.filter((toast) => toast.id !== id);
     },
     confirm(message: string) {
-      return dialogConfirm(message, { title: "确认操作", kind: "warning" });
+      if (this.confirmRequest) this.confirmRequest.resolve(false);
+      return new Promise<boolean>((resolve) => {
+        this.confirmRequest = {
+          id: nanoid(),
+          message,
+          resolve,
+        };
+      });
+    },
+    resolveConfirm(confirmed: boolean) {
+      const request = this.confirmRequest;
+      if (!request) return;
+      this.confirmRequest = null;
+      request.resolve(confirmed);
     },
   },
 });
