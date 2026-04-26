@@ -1,5 +1,6 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
+import { confirm as dialogConfirm } from "@tauri-apps/plugin-dialog";
 
 export interface ToastItem {
   id: string;
@@ -21,7 +22,7 @@ export const useFeedbackStore = defineStore("feedback", {
       this.toasts = this.toasts.filter((toast) => toast.id !== id);
     },
     confirm(message: string) {
-      return window.confirm(message);
+      return dialogConfirm(message, { title: "确认操作", kind: "warning" });
     },
   },
 });

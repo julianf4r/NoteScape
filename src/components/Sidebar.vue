@@ -110,8 +110,8 @@ function selectCanvas(id: string) {
   canvasStore.selectCanvas(id);
 }
 
-function deleteCanvas(id: string, name: string) {
-  if (!feedback.confirm(`删除画布“${name}”？画布会先移入回收站。`)) return;
+async function deleteCanvas(id: string, name: string) {
+  if (!(await feedback.confirm(`删除画布“${name}”？画布会先移入回收站。`))) return;
   canvasStore.deleteCanvas(id);
   noteStore.clearSelection();
   feedback.notify("画布已移入回收站", "success");
@@ -123,8 +123,8 @@ function restoreCanvas(id: string) {
   showTrash.value = false;
 }
 
-function removeForever(id: string, name: string) {
-  if (!feedback.confirm(`永久删除画布“${name}”？此操作会删除其中所有便签，且无法撤销。`)) return;
+async function removeForever(id: string, name: string) {
+  if (!(await feedback.confirm(`永久删除画布“${name}”？此操作会删除其中所有便签，且无法撤销。`))) return;
   noteStore.removeNotesByCanvas(id);
   drawingStore.removeDrawingsByCanvas(id);
   canvasStore.removeForever(id);
@@ -169,8 +169,8 @@ function cancelTagRename() {
   tagDraft.value = "";
 }
 
-function deleteTag(id: string, name: string) {
-  if (!feedback.confirm(`删除标签“${name}”？该标签会从所有便签中移除。`)) return;
+async function deleteTag(id: string, name: string) {
+  if (!(await feedback.confirm(`删除标签“${name}”？该标签会从所有便签中移除。`))) return;
   noteStore.removeTagFromAll(id);
   tagStore.deleteTag(id);
   feedback.notify("标签已删除", "success");
