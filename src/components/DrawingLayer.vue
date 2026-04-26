@@ -108,6 +108,93 @@ function arrowGeometry(drawing: DrawingItem) {
   };
 }
 
+function roughLinePath(drawing: DrawingItem) {
+  const start = drawing.start ?? { x: 0, y: 0 };
+  const end = drawing.end ?? start;
+  return curvedLinePath(start, end, drawing.id, 0.035, 12);
+}
+
+function curvedLinePath(start: DrawingPoint, end: DrawingPoint, seedKey: string, ratio: number, maxOffset: number) {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length < 1) return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+
+  const normalX = -dy / length;
+  const normalY = dx / length;
+  const curveOffset = clamp(seededSigned(seedKey) * length * ratio, -maxOffset, maxOffset);
+  const control = {
+    x: (start.x + end.x) / 2 + normalX * curveOffset,
+    y: (start.y + end.y) / 2 + normalY * curveOffset,
+  };
+  return `M ${start.x} ${start.y} Q ${control.x} ${control.y} ${end.x} ${end.y}`;
+}
+
+function roughRectPath(drawing: DrawingItem) {
+  const rect = rectFor(drawing);
+  const x = rect.x;
+  const y = rect.y;
+  const width = Math.max(0, rect.width);
+  const height = Math.max(0, rect.height);
+  if (width < 1 || height < 1) return "";
+
+  const radius = Math.min(18, width * 0.12, height * 0.12);
+  const wobble = Math.min(8, Math.max(2, Math.min(width, height) * 0.025));
+  const p = (name: string, px: number, py: number) => ({
+    x: px + seededSigned(`${drawing.id}:${name}:x`) * wobble,
+    y: py + seededSigned(`${drawing.id}:${name}:y`) * wobble,
+  });
+
+  const topLeftStart = p("tls", x + radius, y);
+  const topRightStart = p("trs", x + width - radius, y);
+  const topRightEnd = p("tre", x + width, y + radius);
+  const bottomRightStart = p("brs", x + width, y + height - radius);
+  const bottomRightEnd = p("bre", x + width - radius, y + height);
+  const bottomLeftStart = p("bls", x + radius, y + height);
+  const bottomLeftEnd = p("ble", x, y + height - radius);
+  const topLeftEnd = p("tle", x, y + radius);
+
+  return [
+    `M ${topLeftStart.x} ${topLeftStart.y}`,
+    `Q ${(topLeftStart.x + topRightStart.x) / 2} ${y + seededSigned(`${drawing.id}:top`) * wobble} ${topRightStart.x} ${topRightStart.y}`,
+    `Q ${x + width + seededSigned(`${drawing.id}:tr`) * wobble} ${y + seededSigned(`${drawing.id}:tr2`) * wobble} ${topRightEnd.x} ${topRightEnd.y}`,
+    `Q ${x + width + seededSigned(`${drawing.id}:right`) * wobble} ${(topRightEnd.y + bottomRightStart.y) / 2} ${bottomRightStart.x} ${bottomRightStart.y}`,
+    `Q ${x + width + seededSigned(`${drawing.id}:br`) * wobble} ${y + height + seededSigned(`${drawing.id}:br2`) * wobble} ${bottomRightEnd.x} ${bottomRightEnd.y}`,
+    `Q ${(bottomRightEnd.x + bottomLeftStart.x) / 2} ${y + height + seededSigned(`${drawing.id}:bottom`) * wobble} ${bottomLeftStart.x} ${bottomLeftStart.y}`,
+    `Q ${x + seededSigned(`${drawing.id}:bl`) * wobble} ${y + height + seededSigned(`${drawing.id}:bl2`) * wobble} ${bottomLeftEnd.x} ${bottomLeftEnd.y}`,
+    `Q ${x + seededSigned(`${drawing.id}:left`) * wobble} ${(bottomLeftEnd.y + topLeftEnd.y) / 2} ${topLeftEnd.x} ${topLeftEnd.y}`,
+    `Q ${x + seededSigned(`${drawing.id}:tl`) * wobble} ${y + seededSigned(`${drawing.id}:tl2`) * wobble} ${topLeftStart.x} ${topLeftStart.y}`,
+  ].join(" ");
+}
+
+function roughEllipsePath(drawing: DrawingItem) {
+  const rect = rectFor(drawing);
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const rx = Math.abs(rect.width) / 2;
+  const ry = Math.abs(rect.height) / 2;
+  if (rx < 1 || ry < 1) return "";
+
+  const wobble = Math.min(10, Math.max(2, Math.min(rx, ry) * 0.035));
+  const k = 0.5522847498;
+  const p = (name: string, px: number, py: number) => ({
+    x: px + seededSigned(`${drawing.id}:${name}:x`) * wobble,
+    y: py + seededSigned(`${drawing.id}:${name}:y`) * wobble,
+  });
+  const top = p("top", cx, cy - ry);
+  const right = p("right", cx + rx, cy);
+  const bottom = p("bottom", cx, cy + ry);
+  const left = p("left", cx - rx, cy);
+
+  return [
+    `M ${top.x} ${top.y}`,
+    `C ${cx + rx * k} ${cy - ry + seededSigned(`${drawing.id}:c1`) * wobble} ${cx + rx + seededSigned(`${drawing.id}:c2`) * wobble} ${cy - ry * k} ${right.x} ${right.y}`,
+    `C ${cx + rx + seededSigned(`${drawing.id}:c3`) * wobble} ${cy + ry * k} ${cx + rx * k} ${cy + ry + seededSigned(`${drawing.id}:c4`) * wobble} ${bottom.x} ${bottom.y}`,
+    `C ${cx - rx * k} ${cy + ry + seededSigned(`${drawing.id}:c5`) * wobble} ${cx - rx + seededSigned(`${drawing.id}:c6`) * wobble} ${cy + ry * k} ${left.x} ${left.y}`,
+    `C ${cx - rx + seededSigned(`${drawing.id}:c7`) * wobble} ${cy - ry * k} ${cx - rx * k} ${cy - ry + seededSigned(`${drawing.id}:c8`) * wobble} ${top.x} ${top.y}`,
+  ].join(" ");
+}
+
 function seededUnit(value: string) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -115,6 +202,10 @@ function seededUnit(value: string) {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0) / 4294967295;
+}
+
+function seededSigned(value: string) {
+  return seededUnit(value) * 2 - 1;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -224,38 +315,37 @@ function rectFor(drawing: DrawingItem) {
           stroke-linejoin="round"
         />
       </g>
-      <line
+      <path
         v-else-if="drawing.type === 'line'"
         class="drawing-stroke"
-        :x1="drawing.start?.x ?? 0"
-        :y1="drawing.start?.y ?? 0"
-        :x2="drawing.end?.x ?? 0"
-        :y2="drawing.end?.y ?? 0"
+        :d="roughLinePath(drawing)"
         :stroke="drawing.color"
         :stroke-width="drawing.strokeWidth"
+        fill="none"
         stroke-linecap="round"
+        stroke-linejoin="round"
         @mousedown="selectDrawing($event, drawing.id)"
       />
-      <rect
+      <path
         v-else-if="drawing.type === 'rect'"
         class="drawing-stroke drawing-shape"
-        v-bind="rectFor(drawing)"
+        :d="roughRectPath(drawing)"
         :stroke="drawing.color"
         :stroke-width="drawing.strokeWidth"
-        fill="transparent"
-        rx="4"
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"
         @mousedown="selectDrawing($event, drawing.id)"
       />
-      <ellipse
+      <path
         v-else-if="drawing.type === 'ellipse'"
         class="drawing-stroke drawing-shape"
-        :cx="(drawing.x ?? 0) + (drawing.width ?? 0) / 2"
-        :cy="(drawing.y ?? 0) + (drawing.height ?? 0) / 2"
-        :rx="(drawing.width ?? 0) / 2"
-        :ry="(drawing.height ?? 0) / 2"
+        :d="roughEllipsePath(drawing)"
         :stroke="drawing.color"
         :stroke-width="drawing.strokeWidth"
-        fill="transparent"
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"
         @mousedown="selectDrawing($event, drawing.id)"
       />
     </g>
