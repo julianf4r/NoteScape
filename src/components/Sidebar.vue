@@ -217,132 +217,134 @@ function selectSearchCanvas(id: string) {
     </div>
 
     <template v-if="!collapsed">
-      <SearchBox v-model="canvasStore.searchQuery" />
+      <SearchBox v-model="canvasStore.searchQuery" class="sidebar-search" />
 
-      <section v-if="hasSearchQuery" class="search-results">
-      <template v-if="hasSearchResults">
-        <div v-if="searchResults.canvases.length" class="result-group">
-          <h3>画布</h3>
-          <button v-for="canvas in searchResults.canvases" :key="canvas.id" @click="selectSearchCanvas(canvas.id)">
-            <FileText :size="14" />
-            <span>{{ canvas.name }}</span>
-          </button>
+      <div class="navigation-scroll">
+        <section v-if="hasSearchQuery" class="search-results">
+        <template v-if="hasSearchResults">
+          <div v-if="searchResults.canvases.length" class="result-group">
+            <h3>画布</h3>
+            <button v-for="canvas in searchResults.canvases" :key="canvas.id" @click="selectSearchCanvas(canvas.id)">
+              <FileText :size="14" />
+              <span>{{ canvas.name }}</span>
+            </button>
+          </div>
+          <div v-if="searchResults.notes.length" class="result-group">
+            <h3>便签</h3>
+            <button v-for="note in searchResults.notes" :key="note.id" @click="selectSearchNote(note.id, note.canvasId)">
+              <FileText :size="14" />
+              <span>{{ snippet(note.content) }}</span>
+              <small>{{ canvasName(note.canvasId) }}</small>
+            </button>
+          </div>
+          <div v-if="searchResults.tags.length" class="result-group">
+            <h3>标签</h3>
+            <button v-for="tag in searchResults.tags" :key="tag.id" @click="selectSearchTag(tag.id)">
+              <i :style="{ backgroundColor: tag.color }"></i>
+              <span>{{ tag.name }}</span>
+            </button>
+          </div>
+        </template>
+        <div v-else class="empty small">没有匹配结果</div>
+        </section>
+
+        <section v-if="!hasSearchQuery" class="section">
+        <div class="section-title">
+          <span>画布</span>
+          <button class="new-button" :disabled="!appStore.databaseReady" @click="createCanvas"><Plus :size="15" />新建</button>
         </div>
-        <div v-if="searchResults.notes.length" class="result-group">
-          <h3>便签</h3>
-          <button v-for="note in searchResults.notes" :key="note.id" @click="selectSearchNote(note.id, note.canvasId)">
-            <FileText :size="14" />
-            <span>{{ snippet(note.content) }}</span>
-            <small>{{ canvasName(note.canvasId) }}</small>
-          </button>
-        </div>
-        <div v-if="searchResults.tags.length" class="result-group">
-          <h3>标签</h3>
-          <button v-for="tag in searchResults.tags" :key="tag.id" @click="selectSearchTag(tag.id)">
-            <i :style="{ backgroundColor: tag.color }"></i>
-            <span>{{ tag.name }}</span>
-          </button>
-        </div>
-      </template>
-      <div v-else class="empty small">没有匹配结果</div>
-      </section>
 
-      <section v-if="!hasSearchQuery" class="section">
-      <div class="section-title">
-        <span>画布</span>
-        <button class="new-button" :disabled="!appStore.databaseReady" @click="createCanvas"><Plus :size="15" />新建</button>
-      </div>
+        <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
 
-      <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
-
-      <button
-        v-for="canvas in filteredCanvases"
-        :key="canvas.id"
-        class="canvas-row"
-        :class="{ active: canvas.id === canvasStore.currentCanvasId && !showTrash }"
-        @click="selectCanvas(canvas.id)"
-        @dblclick="startRename(canvas.id, canvas.name)"
-        @contextmenu.prevent="startRename(canvas.id, canvas.name)"
-      >
-        <FileText :size="16" />
-        <input
-          v-if="renamingId === canvas.id"
-          v-model="renameDraft"
-          :data-rename-id="canvas.id"
-          @click.stop
-          @keydown.enter.stop.prevent="commitRename(canvas.id)"
-          @keydown.esc.stop.prevent="cancelRename"
-          @blur="commitRename(canvas.id)"
-        />
-        <span v-else class="name">{{ canvas.name }}</span>
-        <span class="row-actions">
-          <button title="上移" :disabled="!canMoveCanvasUp(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, -1)"><ArrowUp :size="14" /></button>
-          <button title="下移" :disabled="!canMoveCanvasDown(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, 1)"><ArrowDown :size="14" /></button>
-          <button title="重命名" @click.stop="startRename(canvas.id, canvas.name)"><Pencil :size="14" /></button>
-          <button title="删除" @click.stop="deleteCanvas(canvas.id, canvas.name)"><Trash2 :size="14" /></button>
-        </span>
-      </button>
-
-      <button class="canvas-row trash" :class="{ active: showTrash }" @click="showTrash = !showTrash">
-        <Archive :size="16" />
-        <span class="name">回收站</span>
-        <span class="time">{{ canvasStore.deletedCanvases.length || "" }}</span>
-      </button>
-
-      <div v-if="showTrash" class="trash-panel">
-        <div v-if="!canvasStore.deletedCanvases.length" class="empty small">回收站为空</div>
-        <div v-for="canvas in canvasStore.deletedCanvases" :key="canvas.id" class="trash-row">
-          <FileText :size="15" />
-          <span>{{ canvas.name }}</span>
-          <button title="恢复" @click="restoreCanvas(canvas.id)"><RotateCcw :size="14" /></button>
-          <button title="永久删除" @click="removeForever(canvas.id, canvas.name)"><X :size="14" /></button>
-        </div>
-      </div>
-      </section>
-
-      <section class="section tags">
-      <div class="section-title">
-        <span>标签</span>
-        <button class="small-add" :disabled="!appStore.databaseReady" @click="createTag"><Plus :size="18" /></button>
-      </div>
-      <button
-        v-for="tag in tagStore.orderedTags"
-        :key="tag.id"
-        class="tag-row"
-        :class="{ active: tag.id === tagStore.activeTagId }"
-        @click="tagStore.toggleTag(tag.id)"
-        @dblclick="startRenameTag(tag.id, tag.name, tag.color)"
-        @contextmenu.prevent="startRenameTag(tag.id, tag.name, tag.color)"
-      >
-        <label class="tag-color-control" title="修改颜色" @click.stop @dblclick.stop @mousedown.stop>
-          <i :style="{ backgroundColor: tag.color }"></i>
+        <button
+          v-for="canvas in filteredCanvases"
+          :key="canvas.id"
+          class="canvas-row"
+          :class="{ active: canvas.id === canvasStore.currentCanvasId && !showTrash }"
+          @click="selectCanvas(canvas.id)"
+          @dblclick="startRename(canvas.id, canvas.name)"
+          @contextmenu.prevent="startRename(canvas.id, canvas.name)"
+        >
+          <FileText :size="16" />
           <input
-            type="color"
-            :value="tag.color"
-            @input="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
-            @change="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+            v-if="renamingId === canvas.id"
+            v-model="renameDraft"
+            :data-rename-id="canvas.id"
+            @click.stop
+            @keydown.enter.stop.prevent="commitRename(canvas.id)"
+            @keydown.esc.stop.prevent="cancelRename"
+            @blur="commitRename(canvas.id)"
           />
-        </label>
-        <input
-          v-if="renamingTagId === tag.id"
-          v-model="tagDraft"
-          :data-tag-rename-id="tag.id"
-          class="tag-name-input"
-          @click.stop
-          @keydown.enter.stop.prevent="commitTag(tag.id)"
-          @keydown.esc.stop.prevent="cancelTagRename"
-          @blur="commitTag(tag.id)"
-        />
-        <span v-else>{{ tag.name }}</span>
-        <b>{{ tag.count }}</b>
-        <span class="tag-actions">
-          <button title="上移" :disabled="!canMoveTagUp(tag.id)" @click.stop="tagStore.moveTag(tag.id, -1)"><ArrowUp :size="14" /></button>
-          <button title="下移" :disabled="!canMoveTagDown(tag.id)" @click.stop="tagStore.moveTag(tag.id, 1)"><ArrowDown :size="14" /></button>
-          <button title="重命名" @click.stop="startRenameTag(tag.id, tag.name, tag.color)"><Pencil :size="14" /></button>
-          <button title="删除" @click.stop="deleteTag(tag.id, tag.name)"><Trash2 :size="14" /></button>
-        </span>
-      </button>
-      </section>
+          <span v-else class="name">{{ canvas.name }}</span>
+          <span class="row-actions">
+            <button title="上移" :disabled="!canMoveCanvasUp(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, -1)"><ArrowUp :size="14" /></button>
+            <button title="下移" :disabled="!canMoveCanvasDown(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, 1)"><ArrowDown :size="14" /></button>
+            <button title="重命名" @click.stop="startRename(canvas.id, canvas.name)"><Pencil :size="14" /></button>
+            <button title="删除" @click.stop="deleteCanvas(canvas.id, canvas.name)"><Trash2 :size="14" /></button>
+          </span>
+        </button>
+
+        <button class="canvas-row trash" :class="{ active: showTrash }" @click="showTrash = !showTrash">
+          <Archive :size="16" />
+          <span class="name">回收站</span>
+          <span class="time">{{ canvasStore.deletedCanvases.length || "" }}</span>
+        </button>
+
+        <div v-if="showTrash" class="trash-panel">
+          <div v-if="!canvasStore.deletedCanvases.length" class="empty small">回收站为空</div>
+          <div v-for="canvas in canvasStore.deletedCanvases" :key="canvas.id" class="trash-row">
+            <FileText :size="15" />
+            <span>{{ canvas.name }}</span>
+            <button title="恢复" @click="restoreCanvas(canvas.id)"><RotateCcw :size="14" /></button>
+            <button title="永久删除" @click="removeForever(canvas.id, canvas.name)"><X :size="14" /></button>
+          </div>
+        </div>
+        </section>
+
+        <section class="section tags">
+        <div class="section-title">
+          <span>标签</span>
+          <button class="small-add" :disabled="!appStore.databaseReady" @click="createTag"><Plus :size="18" /></button>
+        </div>
+        <button
+          v-for="tag in tagStore.orderedTags"
+          :key="tag.id"
+          class="tag-row"
+          :class="{ active: tag.id === tagStore.activeTagId }"
+          @click="tagStore.toggleTag(tag.id)"
+          @dblclick="startRenameTag(tag.id, tag.name, tag.color)"
+          @contextmenu.prevent="startRenameTag(tag.id, tag.name, tag.color)"
+        >
+          <label class="tag-color-control" title="修改颜色" @click.stop @dblclick.stop @mousedown.stop>
+            <i :style="{ backgroundColor: tag.color }"></i>
+            <input
+              type="color"
+              :value="tag.color"
+              @input="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+              @change="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+            />
+          </label>
+          <input
+            v-if="renamingTagId === tag.id"
+            v-model="tagDraft"
+            :data-tag-rename-id="tag.id"
+            class="tag-name-input"
+            @click.stop
+            @keydown.enter.stop.prevent="commitTag(tag.id)"
+            @keydown.esc.stop.prevent="cancelTagRename"
+            @blur="commitTag(tag.id)"
+          />
+          <span v-else>{{ tag.name }}</span>
+          <b>{{ tag.count }}</b>
+          <span class="tag-actions">
+            <button title="上移" :disabled="!canMoveTagUp(tag.id)" @click.stop="tagStore.moveTag(tag.id, -1)"><ArrowUp :size="14" /></button>
+            <button title="下移" :disabled="!canMoveTagDown(tag.id)" @click.stop="tagStore.moveTag(tag.id, 1)"><ArrowDown :size="14" /></button>
+            <button title="重命名" @click.stop="startRenameTag(tag.id, tag.name, tag.color)"><Pencil :size="14" /></button>
+            <button title="删除" @click.stop="deleteTag(tag.id, tag.name)"><Trash2 :size="14" /></button>
+          </span>
+        </button>
+        </section>
+      </div>
     </template>
 
     <button class="settings" :class="{ compact: collapsed }" @click="settingsStore.togglePanel()">
@@ -372,6 +374,7 @@ function selectSearchCanvas(id: string) {
 }
 
 .brand-row {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -399,15 +402,53 @@ function selectSearchCanvas(id: string) {
   font-weight: 600;
 }
 
+.sidebar-search {
+  flex: 0 0 auto;
+}
+
+.navigation-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.58) transparent;
+}
+
+.navigation-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.navigation-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.navigation-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.42);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.navigation-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.5);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
 .section {
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
 .search-results {
-  max-height: calc(100vh - 150px);
-  overflow: auto;
+  flex: 0 0 auto;
   padding: 8px;
   background: #fff;
   border: 1px solid #e5e7eb;
@@ -707,6 +748,7 @@ function selectSearchCanvas(id: string) {
 }
 
 .settings {
+  flex: 0 0 auto;
   margin-top: auto;
   grid-template-columns: 22px 1fr;
   justify-items: start;
