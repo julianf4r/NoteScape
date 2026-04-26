@@ -583,9 +583,25 @@ mark {
   font-synthesis: none;
 }
 
+.editor-content :deep(code) {
+  padding: 0.08em 0.34em;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 5px;
+}
+
 .editor-content :deep(pre) {
   margin: 0.45em 0;
+  padding: 0.58em 0.72em;
+  background: rgba(15, 23, 42, 0.07);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 8px;
   white-space: pre-wrap;
+}
+
+.editor-content :deep(pre code) {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
 }
 
 .editor-content :deep(ul),
