@@ -38,7 +38,7 @@ const emit = defineEmits<{
   duplicate: [];
   copyText: [];
   front: [];
-  context: [event: MouseEvent, linkHref?: string];
+  context: [event: MouseEvent, payload?: { linkHref?: string; codeText?: string }];
   editingDone: [];
   toggleTag: [tagId: string];
 }>();
@@ -367,8 +367,14 @@ function onContextMenu(event: MouseEvent) {
   }
   event.preventDefault();
   event.stopPropagation();
-  const link = props.editing ? null : (event.target as HTMLElement).closest("a");
-  emit("context", event, link?.getAttribute("href") || link?.href);
+  const target = event.target as HTMLElement;
+  const link = props.editing ? null : target.closest("a");
+  const code = props.editing ? null : target.closest("pre, code");
+  const codeText = code?.textContent?.trim();
+  emit("context", event, {
+    linkHref: link?.getAttribute("href") || link?.href,
+    codeText: codeText || undefined,
+  });
 }
 
 function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: boolean; state: { selection: { empty: boolean } } } }) {
