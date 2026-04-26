@@ -412,6 +412,8 @@ function selectSearchCanvas(id: string) {
   display: flex;
   flex-direction: column;
   gap: 0;
+  margin-right: -8px;
+  padding-right: 8px;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
