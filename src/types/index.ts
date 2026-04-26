@@ -63,6 +63,9 @@ export interface AppSettings {
   randomRotation: boolean;
   noteShadow: boolean;
   autoSave: boolean;
+  chineseFontFamily: string;
+  englishFontFamily: string;
+  monospaceFontFamily: string;
 }
 
 export interface AppData {

@@ -139,6 +139,18 @@ async function backupCurrentDatabase() {
           <span>默认字号</span>
           <input type="number" min="12" max="32" :value="settings.defaultFontSize" @change="settingsStore.updateSettings({ defaultFontSize: Number(($event.target as HTMLInputElement).value) })" />
         </label>
+        <label class="font-field">
+          <span>中文字体</span>
+          <input type="text" :value="settings.chineseFontFamily" @change="settingsStore.updateSettings({ chineseFontFamily: ($event.target as HTMLInputElement).value })" />
+        </label>
+        <label class="font-field">
+          <span>英文字体</span>
+          <input type="text" :value="settings.englishFontFamily" @change="settingsStore.updateSettings({ englishFontFamily: ($event.target as HTMLInputElement).value })" />
+        </label>
+        <label class="font-field">
+          <span>等宽字体</span>
+          <input type="text" :value="settings.monospaceFontFamily" @change="settingsStore.updateSettings({ monospaceFontFamily: ($event.target as HTMLInputElement).value })" />
+        </label>
         <label class="switch">
           <span>随机旋转</span>
           <input type="checkbox" :checked="settings.randomRotation" @change="settingsStore.updateSettings({ randomRotation: ($event.target as HTMLInputElement).checked })" />
@@ -249,7 +261,8 @@ label {
 }
 
 select,
-input[type="number"] {
+input[type="number"],
+input[type="text"] {
   width: 100%;
   border: 1px solid #dfe3ea;
   border-radius: 7px;
@@ -258,9 +271,14 @@ input[type="number"] {
 }
 
 select,
-input[type="number"] {
+input[type="number"],
+input[type="text"] {
   height: 34px;
   padding: 0 9px;
+}
+
+.font-field {
+  grid-template-columns: 78px 1fr;
 }
 
 .switch input {

@@ -61,6 +61,21 @@ pub(crate) fn save_structured_data(
         params![bool_to_text(app_data.settings.auto_save)],
     )
     .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('chinese_font_family', ?1)",
+        params![app_data.settings.chinese_font_family],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('english_font_family', ?1)",
+        params![app_data.settings.english_font_family],
+    )
+    .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('monospace_font_family', ?1)",
+        params![app_data.settings.monospace_font_family],
+    )
+    .map_err(|error| error.to_string())?;
 
     for canvas in &app_data.canvases {
         tx.execute(
@@ -287,6 +302,12 @@ pub(crate) fn save_settings(conn: &Connection, settings: &AppSettings) -> Result
             bool_to_text(settings.note_shadow).to_string(),
         ),
         ("auto_save", bool_to_text(settings.auto_save).to_string()),
+        ("chinese_font_family", settings.chinese_font_family.clone()),
+        ("english_font_family", settings.english_font_family.clone()),
+        (
+            "monospace_font_family",
+            settings.monospace_font_family.clone(),
+        ),
     ];
     for (key, value) in entries {
         conn.execute(

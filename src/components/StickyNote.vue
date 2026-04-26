@@ -11,9 +11,11 @@ import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
 import type { StickyNote, TagItem } from "../types";
 import { useFeedbackStore } from "../stores/feedbackStore";
+import { useSettingsStore } from "../stores/settingsStore";
 import { noteColors } from "../utils/colors";
 
 const feedback = useFeedbackStore();
+const settingsStore = useSettingsStore();
 
 const props = defineProps<{
   note: StickyNote;
@@ -59,6 +61,24 @@ function textToDoc(text: string): JSONContent {
       content: line ? [{ type: "text", text: line }] : undefined,
     })),
   };
+}
+
+function buildFontFamily(...groups: string[]) {
+  return groups.flatMap(parseFontList).join(", ");
+}
+
+function parseFontList(value: string) {
+  return value
+    .split(",")
+    .map((font) => font.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean)
+    .map(formatFontName);
+}
+
+function formatFontName(font: string) {
+  const genericFamilies = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"]);
+  if (genericFamilies.has(font.toLowerCase())) return font;
+  return `"${font.replace(/"/g, '\\"')}"`;
 }
 
 const editor = useEditor({
@@ -123,6 +143,12 @@ const contentStyle = computed(() => ({
   fontSize: `${props.note.fontSize}px`,
   fontWeight: props.note.fontWeight === "medium" ? 500 : props.note.fontWeight,
   textAlign: props.note.textAlign,
+  fontFamily: buildFontFamily(
+    settingsStore.settings.englishFontFamily,
+    settingsStore.settings.chineseFontFamily,
+    settingsStore.settings.monospaceFontFamily,
+    "cursive",
+  ),
 }));
 
 const editorStyle = computed(() => ({
@@ -452,7 +478,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   white-space: pre-wrap;
   overflow: hidden;
   line-height: 1.58;
-  font-family: "Segoe Print", "Comic Sans MS", "Microsoft YaHei", cursive;
+  font-family: inherit;
 }
 
 mark {
@@ -477,7 +503,7 @@ mark {
   width: 100%;
   height: 100%;
   color: inherit;
-  font-family: "Segoe Print", "Comic Sans MS", "Microsoft YaHei", cursive;
+  font-family: inherit;
   font-size: inherit;
   font-synthesis: weight;
 }

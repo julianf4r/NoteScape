@@ -13,13 +13,25 @@ export const defaultSettings: AppSettings = {
   randomRotation: true,
   noteShadow: true,
   autoSave: true,
+  chineseFontFamily: "Xiaolai, Microsoft YaHei",
+  englishFontFamily: "Segoe Print, Comic Sans MS",
+  monospaceFontFamily: "Consolas, Cascadia Mono, monospace",
 };
+
+export function normalizeSettings(settings?: Partial<AppSettings>): AppSettings {
+  return {
+    ...defaultSettings,
+    ...settings,
+    theme: "light",
+  };
+}
 
 export function parseData(raw: string): AppData {
   const parsed = JSON.parse(raw) as AppData;
   if (!parsed.version || !Array.isArray(parsed.canvases) || !Array.isArray(parsed.notes)) {
     throw new Error("数据格式不正确");
   }
+  parsed.settings = normalizeSettings(parsed.settings);
   return parsed;
 }
 

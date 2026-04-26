@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import type { AppSettings } from "../types";
-import { defaultSettings } from "../utils/storage";
+import { defaultSettings, normalizeSettings } from "../utils/storage";
 import { reportPersistenceError, saveSettingsData } from "../utils/storage";
 
 export const useSettingsStore = defineStore("settings", {
@@ -10,10 +10,10 @@ export const useSettingsStore = defineStore("settings", {
   }),
   actions: {
     setSettings(settings: AppSettings) {
-      this.settings = { ...settings, theme: "light" };
+      this.settings = normalizeSettings(settings);
     },
     updateSettings(patch: Partial<AppSettings>) {
-      this.settings = { ...this.settings, ...patch, theme: "light" };
+      this.settings = normalizeSettings({ ...this.settings, ...patch });
       void saveSettingsData(this.settings).catch((error) => reportPersistenceError("保存设置", error));
     },
     togglePanel() {

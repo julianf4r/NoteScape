@@ -29,6 +29,12 @@ pub(crate) fn load_structured_data(conn: &Connection) -> Result<AppData, String>
         random_rotation: meta_bool(conn, "random_rotation", true)?,
         note_shadow: meta_bool(conn, "note_shadow", true)?,
         auto_save: meta_bool(conn, "auto_save", true)?,
+        chinese_font_family: meta_value(conn, "chinese_font_family")?
+            .unwrap_or_else(|| "Xiaolai, Microsoft YaHei".to_string()),
+        english_font_family: meta_value(conn, "english_font_family")?
+            .unwrap_or_else(|| "Segoe Print, Comic Sans MS".to_string()),
+        monospace_font_family: meta_value(conn, "monospace_font_family")?
+            .unwrap_or_else(|| "Consolas, Cascadia Mono, monospace".to_string()),
     };
 
     let canvases = load_canvases(conn)?;

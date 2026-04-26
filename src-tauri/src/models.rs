@@ -90,4 +90,22 @@ pub(crate) struct AppSettings {
     pub(crate) random_rotation: bool,
     pub(crate) note_shadow: bool,
     pub(crate) auto_save: bool,
+    #[serde(default = "default_chinese_font_family")]
+    pub(crate) chinese_font_family: String,
+    #[serde(default = "default_english_font_family")]
+    pub(crate) english_font_family: String,
+    #[serde(default = "default_monospace_font_family")]
+    pub(crate) monospace_font_family: String,
+}
+
+fn default_chinese_font_family() -> String {
+    "Xiaolai, Microsoft YaHei".to_string()
+}
+
+fn default_english_font_family() -> String {
+    "Segoe Print, Comic Sans MS".to_string()
+}
+
+fn default_monospace_font_family() -> String {
+    "Consolas, Cascadia Mono, monospace".to_string()
 }
