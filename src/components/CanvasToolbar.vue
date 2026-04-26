@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
-import { ArrowUpRight, ChevronDown, Circle, Hand, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, StickyNote, Trash2 } from "lucide-vue-next";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { ArrowUpRight, ChevronDown, Circle, Hand, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, Trash2 } from "lucide-vue-next";
 import type { DrawingTool } from "../types";
 
 const props = defineProps<{
@@ -13,14 +13,13 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  add: [];
   undo: [];
   redo: [];
   zoomIn: [];
   zoomOut: [];
   resetZoom: [];
   setZoom: [scale: number];
-  toggleHand: [];
+  setHandActive: [active: boolean];
   setDrawingTool: [tool: DrawingTool];
   setDrawingColor: [color: string];
   setDrawingStrokeWidth: [width: number];
@@ -32,13 +31,43 @@ const zoomOptions = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
 const zoomOpen = ref(false);
 const zoomMenu = ref<HTMLElement>();
 const zoomLabel = computed(() => `${Math.round(props.scale * 100)}%`);
+const currentMode = computed(() => (props.handActive ? "hand" : props.drawingTool === "select" ? "select" : "draw"));
+const lastDrawingTool = ref<DrawingTool>(props.drawingTool === "select" ? "pen" : props.drawingTool);
 const drawingTools: Array<{ tool: DrawingTool; title: string; icon: typeof MousePointer2 }> = [
-  { tool: "select", title: "选择绘图", icon: MousePointer2 },
-  { tool: "pen", title: "画笔", icon: Pencil },
+  { tool: "pen", title: "自由绘制", icon: Pencil },
   { tool: "arrow", title: "箭头", icon: ArrowUpRight },
-  { tool: "rect", title: "方框", icon: Square },
-  { tool: "ellipse", title: "圆形", icon: Circle },
+  { tool: "line", title: "直线", icon: Minus },
+  { tool: "rect", title: "矩形", icon: Square },
+  { tool: "ellipse", title: "椭圆", icon: Circle },
 ];
+
+watch(
+  () => props.drawingTool,
+  (tool) => {
+    if (tool !== "select") lastDrawingTool.value = tool;
+  },
+);
+
+function setMode(mode: "select" | "hand" | "draw") {
+  if (mode === "select") {
+    emit("setHandActive", false);
+    emit("setDrawingTool", "select");
+    return;
+  }
+  if (mode === "hand") {
+    emit("setHandActive", true);
+    emit("setDrawingTool", "select");
+    return;
+  }
+  emit("setHandActive", false);
+  emit("setDrawingTool", lastDrawingTool.value === "select" ? "pen" : lastDrawingTool.value);
+}
+
+function selectDrawingTool(tool: DrawingTool) {
+  lastDrawingTool.value = tool;
+  emit("setHandActive", false);
+  emit("setDrawingTool", tool);
+}
 
 function selectZoom(scale: number) {
   emit("setZoom", scale);
@@ -75,30 +104,35 @@ onBeforeUnmount(closeZoom);
     <button title="撤销" @click="emit('undo')"><RotateCcw :size="20" /></button>
     <button title="重做" @click="emit('redo')"><RotateCw :size="20" /></button>
     <span></span>
-    <button title="手型工具" :class="{ active: handActive }" @click="emit('toggleHand')"><Hand :size="20" /></button>
-    <button title="新建便签" @click="emit('add')"><StickyNote :size="20" /></button>
+    <div class="mode-group" aria-label="操作模式">
+      <button title="选择模式" :class="{ active: currentMode === 'select' }" @click="setMode('select')"><MousePointer2 :size="19" /></button>
+      <button title="手型模式" :class="{ active: currentMode === 'hand' }" @click="setMode('hand')"><Hand :size="20" /></button>
+      <button title="绘制模式" :class="{ active: currentMode === 'draw' }" @click="setMode('draw')"><Pencil :size="19" /></button>
+    </div>
     <span></span>
-    <button
-      v-for="item in drawingTools"
-      :key="item.tool"
-      :title="item.title"
-      :class="{ active: drawingTool === item.tool }"
-      @click="emit('setDrawingTool', item.tool)"
-    >
-      <component :is="item.icon" :size="19" />
-    </button>
-    <label class="drawing-color" title="绘图颜色" :style="{ '--drawing-color': drawingColor }">
-      <input type="color" :value="drawingColor" @input="emit('setDrawingColor', ($event.target as HTMLInputElement).value)" />
-    </label>
-    <input
-      class="stroke-input"
-      title="线宽"
-      type="number"
-      min="1"
-      max="16"
-      :value="drawingStrokeWidth"
-      @change="emit('setDrawingStrokeWidth', Number(($event.target as HTMLInputElement).value))"
-    />
+    <div class="draw-group" :class="{ muted: currentMode !== 'draw' }" aria-label="绘制工具">
+      <button
+        v-for="item in drawingTools"
+        :key="item.tool"
+        :title="item.title"
+        :class="{ active: drawingTool === item.tool && currentMode === 'draw' }"
+        @click="selectDrawingTool(item.tool)"
+      >
+        <component :is="item.icon" :size="19" />
+      </button>
+      <label class="drawing-color" title="绘图颜色" :style="{ '--drawing-color': drawingColor }">
+        <input type="color" :value="drawingColor" @input="emit('setDrawingColor', ($event.target as HTMLInputElement).value)" />
+      </label>
+      <input
+        class="stroke-input"
+        title="线宽"
+        type="number"
+        min="1"
+        max="16"
+        :value="drawingStrokeWidth"
+        @change="emit('setDrawingStrokeWidth', Number(($event.target as HTMLInputElement).value))"
+      />
+    </div>
     <button title="删除选中绘图" :disabled="!drawingSelected" @click="emit('deleteDrawing')"><Trash2 :size="18" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>
@@ -158,6 +192,34 @@ button.active {
 button:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+.mode-group,
+.draw-group {
+  display: flex;
+  align-items: center;
+  height: 50px;
+}
+
+.mode-group {
+  padding: 0 4px;
+  gap: 3px;
+}
+
+.mode-group button {
+  width: 40px;
+  height: 38px;
+  border-radius: 8px;
+}
+
+.draw-group.muted {
+  background: rgba(248, 250, 252, 0.62);
+}
+
+.draw-group.muted button:not(.active),
+.draw-group.muted .drawing-color,
+.draw-group.muted .stroke-input {
+  opacity: 0.68;
 }
 
 span {

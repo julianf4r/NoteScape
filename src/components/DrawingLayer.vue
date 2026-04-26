@@ -81,6 +81,7 @@ function rectFor(drawing: DrawingItem) {
     <g v-for="drawing in drawings" :key="drawing.id" :class="{ selected: drawingStore.selectedId === drawing.id }">
       <path
         v-if="drawing.type === 'pen'"
+        class="drawing-stroke"
         :d="smoothPenPath(drawing)"
         :stroke="drawing.color"
         :stroke-width="drawing.strokeWidth"
@@ -91,6 +92,7 @@ function rectFor(drawing: DrawingItem) {
       />
       <line
         v-else-if="drawing.type === 'arrow'"
+        class="drawing-stroke"
         :x1="drawing.start?.x ?? 0"
         :y1="drawing.start?.y ?? 0"
         :x2="drawing.end?.x ?? 0"
@@ -101,8 +103,21 @@ function rectFor(drawing: DrawingItem) {
         marker-end="url(#drawing-arrowhead)"
         @mousedown="selectDrawing($event, drawing.id)"
       />
+      <line
+        v-else-if="drawing.type === 'line'"
+        class="drawing-stroke"
+        :x1="drawing.start?.x ?? 0"
+        :y1="drawing.start?.y ?? 0"
+        :x2="drawing.end?.x ?? 0"
+        :y2="drawing.end?.y ?? 0"
+        :stroke="drawing.color"
+        :stroke-width="drawing.strokeWidth"
+        stroke-linecap="round"
+        @mousedown="selectDrawing($event, drawing.id)"
+      />
       <rect
         v-else-if="drawing.type === 'rect'"
+        class="drawing-stroke drawing-shape"
         v-bind="rectFor(drawing)"
         :stroke="drawing.color"
         :stroke-width="drawing.strokeWidth"
@@ -112,6 +127,7 @@ function rectFor(drawing: DrawingItem) {
       />
       <ellipse
         v-else-if="drawing.type === 'ellipse'"
+        class="drawing-stroke drawing-shape"
         :cx="(drawing.x ?? 0) + (drawing.width ?? 0) / 2"
         :cy="(drawing.y ?? 0) + (drawing.height ?? 0) / 2"
         :rx="(drawing.width ?? 0) / 2"
@@ -134,24 +150,17 @@ function rectFor(drawing: DrawingItem) {
   overflow: visible;
 }
 
-.drawing-layer :deep(path),
-.drawing-layer :deep(line),
-.drawing-layer :deep(rect),
-.drawing-layer :deep(ellipse) {
+.drawing-layer :deep(.drawing-stroke) {
   vector-effect: non-scaling-stroke;
   pointer-events: stroke;
   cursor: move;
 }
 
-.drawing-layer :deep(rect),
-.drawing-layer :deep(ellipse) {
+.drawing-layer :deep(.drawing-shape) {
   pointer-events: visiblePainted;
 }
 
-.drawing-layer .selected :deep(path),
-.drawing-layer .selected :deep(line),
-.drawing-layer .selected :deep(rect),
-.drawing-layer .selected :deep(ellipse) {
+.drawing-layer .selected :deep(.drawing-stroke) {
   filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.9));
 }
 </style>

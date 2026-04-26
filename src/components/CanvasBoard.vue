@@ -69,12 +69,6 @@ function createNoteAt(clientX: number, clientY: number) {
   );
 }
 
-function createNoteCenter() {
-  const rect = board.value?.getBoundingClientRect();
-  if (!rect) return;
-  createNoteAt(rect.left + rect.width / 2, rect.top + rect.height / 2);
-}
-
 function zoomBy(delta: number, originX?: number, originY?: number) {
   const rect = board.value?.getBoundingClientRect();
   const oldScale = viewport.scale;
@@ -210,7 +204,7 @@ function onBoardMouseDown(event: MouseEvent) {
 }
 
 function onBoardDoubleClick(event: MouseEvent) {
-  if (drawingStore.tool !== "select") return;
+  if (handActive.value || drawingStore.tool !== "select") return;
   if (isCanvasBlankTarget(event.target)) createNoteAt(event.clientX, event.clientY);
 }
 
@@ -227,7 +221,7 @@ function startDrawing(event: MouseEvent) {
   event.preventDefault();
   const base = drawingStore.tool === "pen"
     ? { points: [point] }
-    : drawingStore.tool === "arrow"
+    : drawingStore.tool === "arrow" || drawingStore.tool === "line"
       ? { start: point, end: point }
       : { start: point, x: point.x, y: point.y, width: 0, height: 0 };
   const drawing = drawingStore.createDrawing(canvasStore.currentCanvasId, base);
@@ -247,7 +241,7 @@ function updateDrawing(event: MouseEvent) {
     if (!last || Math.hypot(point.x - last.x, point.y - last.y) >= minDistance) drawingStore.appendPoint(drawing.id, point);
     return;
   }
-  if (drawing.type === "arrow") {
+  if (drawing.type === "arrow" || drawing.type === "line") {
     drawingStore.updateDrawing(drawing.id, { end: point });
     return;
   }
@@ -273,8 +267,12 @@ function finishDrawing() {
 
 function isMeaningfulDrawing(drawing: DrawingItem) {
   if (drawing.type === "pen") return (drawing.points?.length ?? 0) > 1;
-  if (drawing.type === "arrow") return Boolean(drawing.start && drawing.end && Math.hypot(drawing.end.x - drawing.start.x, drawing.end.y - drawing.start.y) > 4);
+  if (drawing.type === "arrow" || drawing.type === "line") return Boolean(drawing.start && drawing.end && Math.hypot(drawing.end.x - drawing.start.x, drawing.end.y - drawing.start.y) > 4);
   return Math.max(drawing.width ?? 0, drawing.height ?? 0) > 4;
+}
+
+function setHandActive(value: boolean) {
+  handActive.value = value;
 }
 
 function openCanvasMenu(event: MouseEvent) {
@@ -684,7 +682,7 @@ watch(
         :highlighted="highlightedNoteId === note.id"
         :pan-mode="handActive || spaceDown || drawingStore.tool !== 'select'"
         @select="onNotePointerDown($event, note)"
-        @edit="drawingStore.tool === 'select' && (noteStore.editingId = note.id)"
+        @edit="!handActive && drawingStore.tool === 'select' && (noteStore.editingId = note.id)"
         @update="(patch, track) => updateSelection(note, patch, track)"
         @live="(patch) => noteStore.patchNoteLive(note.id, patch)"
         @delete="deleteSelection(note.id)"
@@ -706,14 +704,13 @@ watch(
       :drawing-color="drawingStore.color"
       :drawing-stroke-width="drawingStore.strokeWidth"
       :drawing-selected="Boolean(drawingStore.selectedId)"
-      @add="createNoteCenter"
       @undo="undo"
       @redo="redo"
       @zoom-in="zoomBy(0.1)"
       @zoom-out="zoomBy(-0.1)"
       @set-zoom="setZoom"
       @reset-zoom="resetZoom"
-      @toggle-hand="handActive = !handActive"
+      @set-hand-active="setHandActive"
       @set-drawing-tool="drawingStore.setTool"
       @set-drawing-color="(color) => drawingStore.color = color"
       @set-drawing-stroke-width="(width) => drawingStore.strokeWidth = Math.min(16, Math.max(1, width || 1))"
