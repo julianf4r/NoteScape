@@ -15,6 +15,7 @@ import { useDrawingStore } from "../stores/drawingStore";
 import type { DrawingItem, DrawingPoint, NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
+import { contentJsonToMarkdown } from "../utils/markdown";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -498,34 +499,15 @@ function duplicateSelectedObjects() {
   if (drawingStore.selectedIds.length) drawingStore.duplicateSelected();
 }
 
-function jsonNodeText(node: unknown): string {
-  if (!node || typeof node !== "object") return "";
-  const value = node as { text?: unknown; content?: unknown };
-  if (typeof value.text === "string") return value.text;
-  return Array.isArray(value.content) ? value.content.map(jsonNodeText).join("") : "";
-}
-
-function plainTextFromContentJson(value: unknown): string {
-  if (!value || typeof value !== "object") return "";
-  const node = value as { type?: unknown; content?: unknown };
-  if (Array.isArray(node.content)) {
-    if (node.type === "paragraph" || node.type === "heading" || node.type === "listItem" || node.type === "taskItem") {
-      return jsonNodeText(node);
-    }
-    return node.content.map(plainTextFromContentJson).filter(Boolean).join("\n");
-  }
-  return jsonNodeText(node);
-}
-
 async function copyNoteText(noteId: string) {
   const note = noteStore.notes.find((item) => item.id === noteId);
-  const text = (note?.content?.trim() || plainTextFromContentJson(note?.contentJson).trim()) ?? "";
+  const text = (contentJsonToMarkdown(note?.contentJson) || note?.content?.trim()) ?? "";
   if (!text) {
     feedback.notify("便签没有可复制的文字");
     return;
   }
   await navigator.clipboard.writeText(text);
-  feedback.notify("文字已复制", "success");
+  feedback.notify("Markdown 已复制", "success");
 }
 
 async function copyLink(href: string) {
