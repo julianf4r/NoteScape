@@ -1,27 +1,29 @@
 import type { NoteColor, NoteDecoration } from "../types";
 
-export interface NoteStylePreset {
+export interface RandomNoteStyle {
   color: NoteColor;
   width: number;
   height: number;
   decoration: NoteDecoration;
 }
 
-export const noteStylePresets: NoteStylePreset[] = [
-  { color: "yellow", width: 300, height: 260, decoration: "none" },
-  { color: "blue", width: 240, height: 220, decoration: "pin" },
-  { color: "pink", width: 230, height: 210, decoration: "none" },
-  { color: "green", width: 220, height: 200, decoration: "paperclip" },
-  { color: "purple", width: 225, height: 205, decoration: "corner-tape" },
-  { color: "white", width: 305, height: 320, decoration: "tape" },
-  { color: "grid-pink", width: 290, height: 270, decoration: "double-tape" },
-  { color: "grid-white", width: 230, height: 210, decoration: "corner-tape" },
-  { color: "yellow", width: 280, height: 240, decoration: "pin" },
-  { color: "blue", width: 265, height: 235, decoration: "none" },
-  { color: "pink", width: 275, height: 250, decoration: "paperclip" },
-  { color: "white", width: 255, height: 225, decoration: "none" },
-];
+const noteColors: NoteColor[] = ["yellow", "blue", "pink", "green", "purple", "white", "grid-pink", "grid-white"];
+const noteDecorations: NoteDecoration[] = ["none", "pin", "tape", "double-tape", "paperclip", "corner-tape"];
 
-export function randomNotePreset() {
-  return noteStylePresets[Math.floor(Math.random() * noteStylePresets.length)];
+function randomItem<T>(items: T[]) {
+  return items[Math.floor(Math.random() * items.length)];
+}
+
+function randomStep(min: number, max: number, step: number) {
+  const steps = Math.floor((max - min) / step);
+  return min + Math.floor(Math.random() * (steps + 1)) * step;
+}
+
+export function randomNoteStyle(): RandomNoteStyle {
+  return {
+    color: randomItem(noteColors),
+    width: randomStep(225, 360, 5),
+    height: randomStep(205, 370, 5),
+    decoration: randomItem(noteDecorations),
+  };
 }
