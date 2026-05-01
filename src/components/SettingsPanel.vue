@@ -318,7 +318,7 @@ input[type="text"] {
 }
 
 .actions button:disabled {
-  cursor: not-allowed;
+  cursor: var(--cursor-not-allowed);
   color: #9ca3af;
   background: #f3f4f6;
 }

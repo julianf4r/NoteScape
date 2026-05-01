@@ -8,6 +8,18 @@
   font-display: swap;
 }
 
+:root {
+  --cursor-default: url("../assets/cursors/notescape/default.svg") 15 11, auto;
+  --cursor-pointer: url("../assets/cursors/notescape/pointer.svg") 22 14, pointer;
+  --cursor-text: url("../assets/cursors/notescape/text.svg") 24 24, text;
+  --cursor-grab: url("../assets/cursors/notescape/grab.svg") 24 24, grab;
+  --cursor-grabbing: url("../assets/cursors/notescape/grabbing.svg") 24 24, grabbing;
+  --cursor-move: url("../assets/cursors/notescape/move.svg") 24 24, move;
+  --cursor-crosshair: url("../assets/cursors/notescape/crosshair.svg") 24 24, crosshair;
+  --cursor-resize-nwse: url("../assets/cursors/notescape/resize-nwse.svg") 24 24, nwse-resize;
+  --cursor-not-allowed: url("../assets/cursors/notescape/not-allowed.svg") 24 24, not-allowed;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -25,6 +37,7 @@ body {
   font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
   color: var(--text-primary);
   background: var(--app-bg);
+  cursor: var(--cursor-default);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -40,7 +53,7 @@ select {
 
 button {
   border: 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .icon-button {

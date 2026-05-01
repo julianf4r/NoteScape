@@ -375,7 +375,7 @@ function rectFor(drawing: DrawingItem) {
 .drawing-layer :deep(.drawing-stroke) {
   vector-effect: non-scaling-stroke;
   pointer-events: stroke;
-  cursor: move;
+  cursor: var(--cursor-move);
 }
 
 .drawing-layer :deep(.drawing-shape) {

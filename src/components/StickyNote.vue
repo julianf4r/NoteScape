@@ -504,7 +504,7 @@ function toggleDecorationPanel() {
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.14), 0 2px 4px rgba(0, 0, 0, 0.08);
   transform-origin: center center;
   transition: transform 0.12s ease;
-  cursor: move;
+  cursor: var(--cursor-move);
   user-select: none;
 }
 
@@ -522,16 +522,16 @@ function toggleDecorationPanel() {
 }
 
 .sticky-note.editing {
-  cursor: text;
+  cursor: var(--cursor-text);
   user-select: text;
 }
 
 .sticky-note:active {
-  cursor: move;
+  cursor: var(--cursor-move);
 }
 
 .sticky-note.editing:active {
-  cursor: text;
+  cursor: var(--cursor-text);
 }
 
 .content {
@@ -580,7 +580,7 @@ mark {
 
 .sticky-note.editing .editor-content,
 .sticky-note.editing .editor-content :deep(.tiptap) {
-  cursor: text;
+  cursor: var(--cursor-text);
   user-select: text;
 }
 
@@ -752,7 +752,7 @@ mark {
   background: #3b82f6;
   border: 2px solid #fff;
   border-radius: 50%;
-  cursor: nwse-resize;
+  cursor: var(--cursor-resize-nwse);
 }
 
 .tag-panel {

@@ -103,7 +103,7 @@ function clickMap(event: MouseEvent) {
   margin: 11px;
   background: #f2f2f1;
   border: 1px solid #dedede;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .mini-note {

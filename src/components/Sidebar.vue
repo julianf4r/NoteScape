@@ -543,7 +543,7 @@ function selectSearchCanvas(id: string) {
 
 .new-button:disabled,
 .small-add:disabled {
-  cursor: not-allowed;
+  cursor: var(--cursor-not-allowed);
   color: #9ca3af;
   background: #f3f4f6;
 }
@@ -649,12 +649,12 @@ function selectSearchCanvas(id: string) {
 }
 
 .row-actions button:disabled {
-  cursor: default;
+  cursor: var(--cursor-default);
   opacity: 0.34;
 }
 
 .tag-actions button:disabled {
-  cursor: default;
+  cursor: var(--cursor-default);
   opacity: 0.34;
 }
 
@@ -703,7 +703,7 @@ function selectSearchCanvas(id: string) {
   place-items: center;
   width: 22px;
   height: 22px;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tag-color-control i {
@@ -738,7 +738,7 @@ function selectSearchCanvas(id: string) {
   width: 100%;
   height: 100%;
   opacity: 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .tag-name-input {

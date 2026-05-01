@@ -190,7 +190,7 @@ button.active {
 }
 
 button:disabled {
-  cursor: default;
+  cursor: var(--cursor-default);
   opacity: 0.4;
 }
 
@@ -294,7 +294,7 @@ span {
   width: 100%;
   height: 100%;
   opacity: 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .stroke-input {

@@ -53,6 +53,7 @@ const searchText = computed(() => canvasStore.searchQuery.trim());
 
 const canvasClass = computed(() => ({
   "hide-grid": !settingsStore.settings.showGrid,
+  "drawing-ready": drawingStore.tool !== "select",
   "pan-ready": handActive.value || spaceDown.value,
   panning: Boolean(panStart.value),
 }));
@@ -986,12 +987,16 @@ watch(
   background-image: none;
 }
 
+.canvas-board.drawing-ready {
+  cursor: var(--cursor-crosshair);
+}
+
 .canvas-board.pan-ready {
-  cursor: move;
+  cursor: var(--cursor-grab);
 }
 
 .canvas-board.panning {
-  cursor: move;
+  cursor: var(--cursor-grabbing);
 }
 
 .canvas-content {
@@ -1157,7 +1162,7 @@ watch(
 }
 
 .menu-popover button:disabled {
-  cursor: default;
+  cursor: var(--cursor-default);
   opacity: 0.45;
 }
 </style>
