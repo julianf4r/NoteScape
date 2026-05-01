@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "NoteScape",
   "mainBinaryName": "NoteScape",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "identifier": "top.volan.note-scape",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -32,7 +32,7 @@
         "language": "zh-CN"
       }
     },
-    "publisher": "Julian Freeman",
+    "publisher": "Julian F.",
     "copyright": "Licensed under the MIT License.",
     "shortDescription": "本地优先的便签画布应用",
     "longDescription": "贴境是一款本地优先的桌面便签画布应用，用于在可缩放画布上整理便签、标签、链接和想法。数据默认保存在本机 SQLite 数据库中，支持多画布管理、搜索筛选、备份与导入导出，适合记录灵感、任务线索和零散知识。",
