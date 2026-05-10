@@ -22,8 +22,8 @@ function randomStep(min: number, max: number, step: number) {
 export function randomNoteStyle(): RandomNoteStyle {
   return {
     color: randomItem(noteColors),
-    width: randomStep(225, 360, 5),
-    height: randomStep(205, 370, 5),
+    width: randomStep(400, 500, 5),
+    height: randomStep(380, 490, 5),
     decoration: randomItem(noteDecorations),
   };
 }
