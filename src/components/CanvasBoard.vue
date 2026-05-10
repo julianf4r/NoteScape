@@ -206,15 +206,20 @@ function onBoardMouseDown(event: MouseEvent) {
     return;
   }
   if (noteStore.editingId && blankTarget) noteStore.stopEditing();
+  if (!isCanvasControlTarget(event.target) && shouldPan) {
+    startPan(event);
+    return;
+  }
   if (blankTarget) {
-    if (event.shiftKey || event.ctrlKey) {
-      startBoxSelect(event);
-    } else {
+    if (event.button === 0) {
       noteStore.clearSelection();
       drawingStore.clearSelection();
+      startBoxSelect(event);
+      return;
     }
+    noteStore.clearSelection();
+    drawingStore.clearSelection();
   }
-  if (!isCanvasControlTarget(event.target) && (blankTarget || shouldPan)) startPan(event);
 }
 
 function onBoardDoubleClick(event: MouseEvent) {
