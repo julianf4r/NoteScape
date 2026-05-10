@@ -2,10 +2,11 @@
 import type { DrawingItem, DrawingPoint } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
-defineProps<{
+const props = defineProps<{
   canvasId: string;
   drawings: DrawingItem[];
   scale: number;
+  panMode: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 const drawingStore = useDrawingStore();
 
 function selectDrawing(event: MouseEvent, id: string) {
+  if (event.button === 1 || props.panMode) return;
   event.preventDefault();
   event.stopPropagation();
   emit("dragDrawing", event, id);

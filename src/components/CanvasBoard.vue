@@ -834,6 +834,7 @@ watch(
         :canvas-id="canvasStore.currentCanvasId"
         :drawings="currentCanvasDrawings"
         :scale="viewport.scale"
+        :pan-mode="handActive || spaceDown"
         @drag-drawing="startDrawingDrag"
         @context-drawing="openDrawingMenu"
       />
