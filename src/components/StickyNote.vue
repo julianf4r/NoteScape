@@ -191,15 +191,54 @@ watch(
 );
 
 function startDrag(event: MouseEvent) {
+  if (props.editing) {
+    focusEditorFromNoteEdge(event);
+    return;
+  }
   if (props.panMode || event.button === 1) {
     emit("select", event);
     return;
   }
-  if (props.editing || (event.target as HTMLElement).closest(".note-actions, .resize-handle")) return;
+  if ((event.target as HTMLElement).closest(".note-actions, .resize-handle")) return;
   emit("select", event);
   dragStart.value = { x: event.clientX, y: event.clientY, before: { ...props.note } };
   window.addEventListener("mousemove", drag);
   window.addEventListener("mouseup", endDrag, { once: true });
+}
+
+function focusEditorFromNoteEdge(event: MouseEvent) {
+  const target = event.target as HTMLElement;
+  if (target.closest(".editor-content, .text-menu")) return;
+  event.preventDefault();
+  event.stopPropagation();
+  const richEditor = editor.value;
+  const view = richEditor?.view;
+  if (!richEditor || !view) return;
+  const rect = view.dom.getBoundingClientRect();
+  if (event.clientX > rect.right) {
+    const lineStart = view.posAtCoords({
+      left: rect.left + 1,
+      top: Math.min(rect.bottom - 1, Math.max(rect.top + 1, event.clientY)),
+    });
+    if (lineStart) {
+      richEditor.chain().focus().setTextSelection(lineStart.pos).run();
+      requestAnimationFrame(() => moveNativeSelectionToLineBoundary("right"));
+      return;
+    }
+  }
+  const coords = {
+    left: Math.min(rect.right - 1, Math.max(rect.left + 1, event.clientX)),
+    top: Math.min(rect.bottom - 1, Math.max(rect.top + 1, event.clientY)),
+  };
+  const position = view.posAtCoords(coords);
+  if (position) richEditor.chain().focus().setTextSelection(position.pos).run();
+  else richEditor.commands.focus("end");
+}
+
+function moveNativeSelectionToLineBoundary(direction: "left" | "right") {
+  const selection = window.getSelection();
+  if (!selection?.modify) return;
+  selection.modify("move", direction, "lineboundary");
 }
 
 function drag(event: MouseEvent) {
