@@ -40,6 +40,7 @@ const mixedDrag = ref<{ startX: number; startY: number; beforeNotes: StickyNoteT
 const activeDrawingId = ref("");
 const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
+const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
 
 const visibleNotes = computed(() =>
@@ -441,6 +442,22 @@ function startDrawingDrag(event: MouseEvent, drawingId: string) {
   window.addEventListener("mouseup", endDrawingDrag, { once: true });
 }
 
+function startDrawingEdit(event: MouseEvent, drawingId: string, handle: "start" | "end" | "resize") {
+  if (event.button !== 0 || handActive.value || spaceDown.value) return;
+  const drawing = drawingStore.drawings.find((item) => item.id === drawingId);
+  if (!drawing) return;
+  event.preventDefault();
+  event.stopPropagation();
+  drawingStore.select(drawingId);
+  drawingEdit.value = {
+    id: drawingId,
+    handle,
+    before: cloneDrawing(drawing),
+  };
+  window.addEventListener("mousemove", editDrawing);
+  window.addEventListener("mouseup", endDrawingEdit, { once: true });
+}
+
 function dragDrawing(event: MouseEvent) {
   if (!drawingDrag.value) return;
   drawingStore.moveDrawingLive(
@@ -451,10 +468,35 @@ function dragDrawing(event: MouseEvent) {
   );
 }
 
+function editDrawing(event: MouseEvent) {
+  if (!drawingEdit.value) return;
+  const point = drawingPointFromEvent(event);
+  if (!point) return;
+  const { id, handle, before } = drawingEdit.value;
+  if ((before.type === "arrow" || before.type === "line") && (handle === "start" || handle === "end")) {
+    drawingStore.updateDrawing(id, { [handle]: point });
+    return;
+  }
+  if ((before.type === "rect" || before.type === "ellipse") && handle === "resize") {
+    const x = before.x ?? 0;
+    const y = before.y ?? 0;
+    drawingStore.updateDrawing(id, {
+      width: Math.max(8, point.x - x),
+      height: Math.max(8, point.y - y),
+    });
+  }
+}
+
 function endDrawingDrag() {
   window.removeEventListener("mousemove", dragDrawing);
   if (drawingDrag.value) drawingStore.commitDrawingMove(drawingDrag.value.before);
   drawingDrag.value = null;
+}
+
+function endDrawingEdit() {
+  window.removeEventListener("mousemove", editDrawing);
+  if (drawingEdit.value) drawingStore.commitDrawingMove(drawingEdit.value.before);
+  drawingEdit.value = null;
 }
 
 function cloneDrawing(drawing: DrawingItem): DrawingItem {
@@ -770,6 +812,7 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("mousemove", updateDrawing);
   window.removeEventListener("mousemove", dragDrawing);
+  window.removeEventListener("mousemove", editDrawing);
   window.removeEventListener("mousemove", dragMixed);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
@@ -841,6 +884,7 @@ watch(
         :scale="viewport.scale"
         :pan-mode="handActive || spaceDown"
         @drag-drawing="startDrawingDrag"
+        @edit-drawing="startDrawingEdit"
         @context-drawing="openDrawingMenu"
       />
       <StickyNote

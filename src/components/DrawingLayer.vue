@@ -11,6 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   dragDrawing: [event: MouseEvent, drawingId: string];
+  editDrawing: [event: MouseEvent, drawingId: string, handle: "start" | "end" | "resize"];
   contextDrawing: [event: MouseEvent, drawingId: string];
 }>();
 
@@ -21,6 +22,13 @@ function selectDrawing(event: MouseEvent, id: string) {
   event.preventDefault();
   event.stopPropagation();
   emit("dragDrawing", event, id);
+}
+
+function editDrawing(event: MouseEvent, id: string, handle: "start" | "end" | "resize") {
+  if (event.button !== 0 || props.panMode) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit("editDrawing", event, id, handle);
 }
 
 function openDrawingMenu(event: MouseEvent, id: string) {
@@ -228,6 +236,14 @@ function rectFor(drawing: DrawingItem) {
     height: drawing.height ?? 0,
   };
 }
+
+function resizeHandlePoint(drawing: DrawingItem) {
+  const rect = rectFor(drawing);
+  return {
+    x: rect.x + rect.width,
+    y: rect.y + rect.height,
+  };
+}
 </script>
 
 <template>
@@ -361,6 +377,32 @@ function rectFor(drawing: DrawingItem) {
         stroke-linejoin="round"
         @mousedown="selectDrawing($event, drawing.id)"
       />
+      <template v-if="drawingStore.selectedIds.includes(drawing.id) && (drawing.type === 'arrow' || drawing.type === 'line')">
+        <g
+          v-if="drawing.start"
+          class="edit-handle"
+          @mousedown="editDrawing($event, drawing.id, 'start')"
+        >
+          <circle class="edit-handle-hit" :cx="drawing.start.x" :cy="drawing.start.y" :r="11 / scale" />
+          <circle class="edit-handle-dot" :cx="drawing.start.x" :cy="drawing.start.y" :r="5 / scale" />
+        </g>
+        <g
+          v-if="drawing.end"
+          class="edit-handle"
+          @mousedown="editDrawing($event, drawing.id, 'end')"
+        >
+          <circle class="edit-handle-hit" :cx="drawing.end.x" :cy="drawing.end.y" :r="11 / scale" />
+          <circle class="edit-handle-dot" :cx="drawing.end.x" :cy="drawing.end.y" :r="5 / scale" />
+        </g>
+      </template>
+      <g
+        v-if="drawingStore.selectedIds.includes(drawing.id) && (drawing.type === 'rect' || drawing.type === 'ellipse')"
+        class="edit-handle"
+        @mousedown="editDrawing($event, drawing.id, 'resize')"
+      >
+        <circle class="edit-handle-hit" :cx="resizeHandlePoint(drawing).x" :cy="resizeHandlePoint(drawing).y" :r="11 / scale" />
+        <circle class="edit-handle-dot" :cx="resizeHandlePoint(drawing).x" :cy="resizeHandlePoint(drawing).y" :r="5 / scale" />
+      </g>
     </g>
   </svg>
 </template>
@@ -393,5 +435,22 @@ function rectFor(drawing: DrawingItem) {
 
 .drawing-layer .selected:not(.arrow-drawing) :deep(.drawing-stroke) {
   filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.9));
+}
+
+.edit-handle {
+  pointer-events: all;
+  cursor: var(--cursor-pointer);
+}
+
+.edit-handle-hit {
+  fill: transparent;
+  stroke: transparent;
+}
+
+.edit-handle-dot {
+  fill: #ffffff;
+  stroke: #2563eb;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 </style>
