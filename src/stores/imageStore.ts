@@ -27,6 +27,7 @@ export const useImageStore = defineStore("image", {
     selectedIds: [] as string[],
     history: [] as ImageHistoryEntry[],
     future: [] as ImageHistoryEntry[],
+    clipboard: [] as CanvasImage[],
   }),
   getters: {
     maxZ: (state) => Math.max(0, ...state.images.map((image) => image.zIndex)),
@@ -78,6 +79,19 @@ export const useImageStore = defineStore("image", {
       saveImageSafely(image);
       return image;
     },
+    cloneImageToCanvas(image: CanvasImage, canvasId: string, x: number, y: number, index = 0) {
+      const copy: CanvasImage = {
+        ...cloneImage(image),
+        id: nanoid(),
+        canvasId,
+        x,
+        y,
+        zIndex: this.maxZ + index + 1,
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      return copy;
+    },
     updateImage(id: string, patch: Partial<CanvasImage>, track = true) {
       const image = this.images.find((item) => item.id === id);
       if (!image) return;
@@ -108,6 +122,87 @@ export const useImageStore = defineStore("image", {
     deleteSelected() {
       [...this.selectedIds].forEach((id) => this.deleteImage(id));
     },
+    copySelected() {
+      this.clipboard = this.images
+        .filter((image) => this.selectedIds.includes(image.id))
+        .map(cloneImage);
+    },
+    duplicateSelected() {
+      const selected = this.images.filter((image) => this.selectedIds.includes(image.id));
+      if (!selected.length) return;
+      const copies = selected.map((image, index) => this.cloneImageToCanvas(
+        image,
+        image.canvasId,
+        image.x + 28 + index * 8,
+        image.y + 28 + index * 8,
+        index,
+      ));
+      this.images.push(...copies);
+      this.selectedIds = copies.map((image) => image.id);
+      copies.forEach((image) => {
+        this.addHistory({ type: "create", after: cloneImage(image) });
+        saveImageSafely(image);
+      });
+    },
+    pasteClipboard(canvasId: string, x: number, y: number) {
+      if (!this.clipboard.length) return;
+      const minX = Math.min(...this.clipboard.map((image) => image.x));
+      const minY = Math.min(...this.clipboard.map((image) => image.y));
+      const copies = this.clipboard.map((image, index) => this.cloneImageToCanvas(
+        image,
+        canvasId,
+        x + (image.x - minX) + index * 8,
+        y + (image.y - minY) + index * 8,
+        index,
+      ));
+      this.images.push(...copies);
+      this.selectedIds = copies.map((image) => image.id);
+      copies.forEach((image) => {
+        this.addHistory({ type: "create", after: cloneImage(image) });
+        saveImageSafely(image);
+      });
+    },
+    moveSelectedBy(deltaX: number, deltaY: number, beforeImages: CanvasImage[]) {
+      beforeImages.forEach((before) => {
+        const image = this.images.find((item) => item.id === before.id);
+        if (!image) return;
+        image.x = before.x + deltaX;
+        image.y = before.y + deltaY;
+        image.updatedAt = now();
+      });
+    },
+    commitSelectedMove(beforeImages: CanvasImage[]) {
+      beforeImages.forEach((before) => {
+        const image = this.images.find((item) => item.id === before.id);
+        if (!image) return;
+        if (hasMeaningfulChange(before, image)) this.addHistory({ type: "update", before: cloneImage(before), after: cloneImage(image) });
+        saveImageSafely(image);
+      });
+    },
+    bringSelectedToFront() {
+      const selected = this.images.filter((image) => this.selectedIds.includes(image.id));
+      if (!selected.length) return;
+      const targetPinned = !selected.every((image) => image.pinned === true);
+      const baseZ = this.maxZ;
+      selected.forEach((image, index) => {
+        const before = cloneImage(image);
+        image.pinned = targetPinned;
+        image.zIndex = baseZ + index + 1;
+        image.updatedAt = now();
+        if (hasMeaningfulChange(before, image)) this.addHistory({ type: "update", before, after: cloneImage(image) });
+        saveImageSafely(image);
+      });
+    },
+    bringToFront(id: string) {
+      const image = this.images.find((item) => item.id === id);
+      if (!image) return;
+      const before = cloneImage(image);
+      image.pinned = !image.pinned;
+      image.zIndex = this.maxZ + 1;
+      image.updatedAt = now();
+      if (hasMeaningfulChange(before, image)) this.addHistory({ type: "update", before, after: cloneImage(image) });
+      saveImageSafely(image);
+    },
     removeImagesByCanvas(canvasId: string) {
       this.images = this.images.filter((image) => image.canvasId !== canvasId);
       this.selectedIds = this.selectedIds.filter((id) => this.images.some((image) => image.id === id));
@@ -121,6 +216,9 @@ export const useImageStore = defineStore("image", {
       this.selectedIds = this.selectedIds.includes(id)
         ? this.selectedIds.filter((item) => item !== id)
         : [...this.selectedIds, id];
+    },
+    setSelection(ids: string[]) {
+      this.selectedIds = Array.from(new Set(ids)).filter((id) => this.images.some((image) => image.id === id));
     },
     clearSelection() {
       this.selectedIds = [];

@@ -41,7 +41,7 @@ const contextWorld = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
 const groupDrag = ref<{ startX: number; startY: number; before: StickyNoteType[] } | null>(null);
-const mixedDrag = ref<{ startX: number; startY: number; beforeNotes: StickyNoteType[]; beforeDrawings: DrawingItem[] } | null>(null);
+const mixedDrag = ref<{ startX: number; startY: number; beforeNotes: StickyNoteType[]; beforeDrawings: DrawingItem[]; beforeImages: CanvasImageType[] } | null>(null);
 const activeDrawingId = ref("");
 const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
@@ -384,6 +384,7 @@ function startMixedDrag(event: MouseEvent) {
     startY: event.clientY,
     beforeNotes: noteStore.notes.filter((item) => noteStore.selectedIds.includes(item.id)).map((item) => ({ ...item, tags: [...item.tags] })),
     beforeDrawings: drawingStore.drawings.filter((item) => drawingStore.selectedIds.includes(item.id)).map(cloneDrawing),
+    beforeImages: imageStore.images.filter((item) => imageStore.selectedIds.includes(item.id)).map(cloneImage),
   };
   window.addEventListener("mousemove", dragMixed);
   window.addEventListener("mouseup", endMixedDrag, { once: true });
@@ -395,6 +396,7 @@ function dragMixed(event: MouseEvent) {
   const deltaY = (event.clientY - mixedDrag.value.startY) / viewport.scale;
   noteStore.moveSelectedBy(deltaX, deltaY, mixedDrag.value.beforeNotes);
   drawingStore.moveSelectedBy(deltaX, deltaY, mixedDrag.value.beforeDrawings);
+  imageStore.moveSelectedBy(deltaX, deltaY, mixedDrag.value.beforeImages);
 }
 
 function endMixedDrag() {
@@ -402,6 +404,7 @@ function endMixedDrag() {
   if (mixedDrag.value) {
     noteStore.commitSelectedMove(mixedDrag.value.beforeNotes);
     drawingStore.commitSelectedMove(mixedDrag.value.beforeDrawings);
+    imageStore.commitSelectedMove(mixedDrag.value.beforeImages);
   }
   mixedDrag.value = null;
 }
@@ -528,9 +531,21 @@ function endDrawingEdit() {
 function onImagePointerDown(event: MouseEvent, image: CanvasImageType) {
   if (drawingStore.tool !== "select") return;
   if (handActive.value || spaceDown.value || event.button === 1) return;
-  noteStore.clearSelection();
-  drawingStore.clearSelection();
-  imageStore.select(image.id);
+  const additive = event.shiftKey || event.ctrlKey;
+  const alreadySelected = imageStore.selectedIds.includes(image.id);
+  if (!additive && !alreadySelected) {
+    noteStore.clearSelection();
+    drawingStore.clearSelection();
+  }
+  if (!alreadySelected || additive) imageStore.select(image.id, additive);
+  if (additive && alreadySelected) {
+    event.preventDefault();
+    return;
+  }
+  if (selectedObjectCount() > 1 && imageStore.selectedIds.includes(image.id)) {
+    event.preventDefault();
+    startMixedDrag(event);
+  }
 }
 
 function updateImage(image: CanvasImageType, patch: Partial<CanvasImageType> & { __before?: CanvasImageType }, track = true) {
@@ -600,6 +615,10 @@ function cloneDrawing(drawing: DrawingItem): DrawingItem {
   };
 }
 
+function cloneImage(image: CanvasImageType): CanvasImageType {
+  return { ...image };
+}
+
 function undo() {
   const preferImage = Boolean(imageStore.selectedIds.length);
   if (preferImage) {
@@ -608,11 +627,11 @@ function undo() {
   }
   const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select");
   if (preferDrawing) {
-    if (!drawingStore.undo() && noteStore.history.length) noteStore.undo();
+    if (!drawingStore.undo() && !imageStore.undo() && noteStore.history.length) noteStore.undo();
     return;
   }
   if (noteStore.history.length) noteStore.undo();
-  else drawingStore.undo();
+  else if (!drawingStore.undo()) imageStore.undo();
 }
 
 function redo() {
@@ -622,11 +641,11 @@ function redo() {
   }
   const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length));
   if (preferDrawing) {
-    if (!drawingStore.redo() && noteStore.future.length) noteStore.redo();
+    if (!drawingStore.redo() && !imageStore.redo() && noteStore.future.length) noteStore.redo();
     return;
   }
   if (noteStore.future.length) noteStore.redo();
-  else drawingStore.redo();
+  else if (!drawingStore.redo()) imageStore.redo();
 }
 
 function duplicateSelection(noteId: string) {
@@ -637,6 +656,7 @@ function duplicateSelection(noteId: string) {
 function copySelectedObjects() {
   if (noteStore.selectedIds.length) noteStore.copySelected();
   if (drawingStore.selectedIds.length) drawingStore.copySelected();
+  if (imageStore.selectedIds.length) imageStore.copySelected();
 }
 
 function duplicateSelectedObjects() {
@@ -645,6 +665,7 @@ function duplicateSelectedObjects() {
     else noteStore.duplicateNote(noteStore.selectedIds[0]);
   }
   if (drawingStore.selectedIds.length) drawingStore.duplicateSelected();
+  if (imageStore.selectedIds.length) imageStore.duplicateSelected();
 }
 
 async function copyNoteText(noteId: string) {
@@ -673,6 +694,11 @@ function bringSelectionToFront(noteId: string) {
   else noteStore.bringToFront(noteId);
 }
 
+function bringImageSelectionToFront(imageId: string) {
+  if (imageStore.selectedIds.length > 1 && imageStore.selectedIds.includes(imageId)) imageStore.bringSelectedToFront();
+  else imageStore.bringToFront(imageId);
+}
+
 function updateSelection(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id) && !patch.__before) {
     noteStore.updateSelected(patch);
@@ -695,6 +721,7 @@ function changeColorForContext(noteId: string, color: NoteColor) {
 function pasteAtContext() {
   noteStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
   drawingStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
+  imageStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
   contextMenu.value = null;
 }
 
@@ -862,14 +889,14 @@ function onKeydown(event: KeyboardEvent) {
     return;
   }
   if (event.ctrlKey && event.key.toLowerCase() === "c" && !noteStore.editingId) {
-    if (noteStore.selectedIds.length || drawingStore.selectedIds.length) {
+    if (noteStore.selectedIds.length || drawingStore.selectedIds.length || imageStore.selectedIds.length) {
       event.preventDefault();
       copySelectedObjects();
     }
     return;
   }
   if (event.ctrlKey && event.key.toLowerCase() === "d" && !noteStore.editingId) {
-    if (noteStore.selectedIds.length || drawingStore.selectedIds.length) {
+    if (noteStore.selectedIds.length || drawingStore.selectedIds.length || imageStore.selectedIds.length) {
       event.preventDefault();
       duplicateSelectedObjects();
     }
@@ -907,6 +934,7 @@ function onKeydown(event: KeyboardEvent) {
     const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
     noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
     drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
+    imageStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
   }
 }
 
@@ -1123,12 +1151,17 @@ watch(
         </div>
       </template>
       <template v-else-if="contextMenu.imageId">
+        <button @click="copySelectedObjects(); contextMenu = null">复制</button>
+        <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
+        <button @click="bringImageSelectionToFront(contextMenu!.imageId!); contextMenu = null">
+          {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.pinned ? "取消置顶" : "置顶" }}
+        </button>
         <button @click="imageStore.deleteImage(contextMenu!.imageId!); contextMenu = null">删除</button>
       </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
         <button @click="addImageAt(contextMenu!.x, contextMenu!.y); contextMenu = null">添加图片</button>
-        <button :disabled="!noteStore.clipboard.length && !drawingStore.clipboard.length" @click="pasteAtContext">粘贴</button>
+        <button :disabled="!noteStore.clipboard.length && !drawingStore.clipboard.length && !imageStore.clipboard.length" @click="pasteAtContext">粘贴</button>
         <button @click="fitView(); contextMenu = null">适应视图</button>
         <button @click="resetZoom(); contextMenu = null">重置缩放</button>
       </template>
