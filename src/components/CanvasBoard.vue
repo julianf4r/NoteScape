@@ -397,10 +397,12 @@ function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
   }
   if (!alreadySelected || additive) noteStore.select(note.id, additive);
   if (selectedObjectCount() > 1 && noteStore.selectedIds.includes(note.id)) {
+    event.preventDefault();
     startMixedDrag(event);
     return;
   }
   if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id)) {
+    event.preventDefault();
     groupDrag.value = {
       startX: event.clientX,
       startY: event.clientY,

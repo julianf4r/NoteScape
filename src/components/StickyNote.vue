@@ -201,6 +201,7 @@ function startDrag(event: MouseEvent) {
   }
   if ((event.target as HTMLElement).closest(".note-actions, .resize-handle")) return;
   emit("select", event);
+  if (event.defaultPrevented) return;
   dragStart.value = { x: event.clientX, y: event.clientY, before: { ...props.note } };
   window.addEventListener("mousemove", drag);
   window.addEventListener("mouseup", endDrag, { once: true });
