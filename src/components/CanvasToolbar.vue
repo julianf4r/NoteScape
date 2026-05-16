@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { ArrowUpRight, ChevronDown, Circle, Hand, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, Trash2 } from "lucide-vue-next";
+import { ArrowUpRight, ChevronDown, Circle, Hand, ImagePlus, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, Trash2 } from "lucide-vue-next";
 import type { DrawingTool } from "../types";
 
 const props = defineProps<{
@@ -24,6 +24,7 @@ const emit = defineEmits<{
   setDrawingColor: [color: string];
   setDrawingStrokeWidth: [width: number];
   deleteDrawing: [];
+  addImage: [];
   settings: [];
 }>();
 
@@ -134,6 +135,7 @@ onBeforeUnmount(closeZoom);
       />
     </div>
     <button title="删除选中绘图" :disabled="!drawingSelected" @click="emit('deleteDrawing')"><Trash2 :size="18" /></button>
+    <button title="添加图片" @click="emit('addImage')"><ImagePlus :size="18" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>
     <div ref="zoomMenu" class="zoom-menu" @mousedown.stop>

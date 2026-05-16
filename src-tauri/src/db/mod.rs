@@ -8,9 +8,10 @@ use crate::models::AppData;
 pub(crate) use connection::open_database;
 pub(crate) use read::{load_existing_database, load_or_seed};
 pub(crate) use write::{
-    create_default_database, delete_canvas, delete_drawing, delete_drawings_by_canvas, delete_note,
-    delete_notes_by_canvas, delete_tag, remove_canvas_forever, restore_canvas, save_settings,
-    save_structured_data, upsert_canvas, upsert_drawing, upsert_note, upsert_tag,
+    create_default_database, delete_canvas, delete_drawing, delete_drawings_by_canvas,
+    delete_image, delete_images_by_canvas, delete_note, delete_notes_by_canvas, delete_tag,
+    remove_canvas_forever, restore_canvas, save_settings, save_structured_data, upsert_canvas,
+    upsert_drawing, upsert_image, upsert_note, upsert_tag,
 };
 
 pub(crate) fn parse_app_data(data: &str) -> Result<AppData, String> {

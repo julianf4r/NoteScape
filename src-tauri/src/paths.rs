@@ -19,6 +19,10 @@ pub(crate) fn default_db_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir(app)?.join("notescape.sqlite3"))
 }
 
+pub(crate) fn default_image_library_path(app: &AppHandle) -> Result<PathBuf, String> {
+    Ok(app_data_dir(app)?.join("images"))
+}
+
 fn pref_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_config_dir(app)?.join(PREF_FILE))
 }

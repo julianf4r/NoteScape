@@ -23,6 +23,7 @@ pub(crate) fn default_app_data() -> AppData {
             viewport: None,
         }],
         drawings: Vec::new(),
+        images: Vec::new(),
         notes: vec![StickyNote {
             id: "note-default".to_string(),
             canvas_id: "canvas-default".to_string(),
@@ -57,6 +58,7 @@ pub(crate) fn default_app_data() -> AppData {
             chinese_font_family: "Xiaolai, Microsoft YaHei".to_string(),
             english_font_family: "Segoe Print, Comic Sans MS".to_string(),
             monospace_font_family: "Consolas, Cascadia Mono, monospace".to_string(),
+            image_library_path: String::new(),
         },
     }
 }

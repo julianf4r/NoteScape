@@ -65,6 +65,23 @@ export interface StickyNote {
   updatedAt: string;
 }
 
+export interface CanvasImage {
+  id: string;
+  canvasId: string;
+  fileName: string;
+  originalName?: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  zIndex: number;
+  pinned?: boolean;
+  decoration?: NoteDecoration;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CanvasItem {
   id: string;
   name: string;
@@ -95,6 +112,7 @@ export interface AppSettings {
   chineseFontFamily: string;
   englishFontFamily: string;
   monospaceFontFamily: string;
+  imageLibraryPath: string;
 }
 
 export interface AppData {
@@ -102,6 +120,7 @@ export interface AppData {
   canvases: CanvasItem[];
   notes: StickyNote[];
   drawings: DrawingItem[];
+  images: CanvasImage[];
   tags: TagItem[];
   settings: AppSettings;
 }
@@ -125,5 +144,13 @@ export interface DrawingHistoryEntry {
   type: "create" | "update" | "delete";
   before?: DrawingItem;
   after?: DrawingItem;
+  timestamp: string;
+}
+
+export interface ImageHistoryEntry {
+  id: string;
+  type: "create" | "update" | "delete";
+  before?: CanvasImage;
+  after?: CanvasImage;
   timestamp: string;
 }

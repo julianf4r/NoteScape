@@ -14,6 +14,8 @@ pub(crate) struct AppData {
     pub(crate) notes: Vec<StickyNote>,
     #[serde(default)]
     pub(crate) drawings: Vec<DrawingItem>,
+    #[serde(default)]
+    pub(crate) images: Vec<CanvasImage>,
     pub(crate) tags: Vec<TagItem>,
     pub(crate) settings: AppSettings,
 }
@@ -105,6 +107,26 @@ pub(crate) struct DrawingItem {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub(crate) struct CanvasImage {
+    pub(crate) id: String,
+    pub(crate) canvas_id: String,
+    pub(crate) file_name: String,
+    pub(crate) original_name: Option<String>,
+    pub(crate) x: f64,
+    pub(crate) y: f64,
+    pub(crate) width: f64,
+    pub(crate) height: f64,
+    pub(crate) rotation: f64,
+    pub(crate) z_index: i64,
+    #[serde(default)]
+    pub(crate) pinned: bool,
+    pub(crate) decoration: Option<String>,
+    pub(crate) created_at: String,
+    pub(crate) updated_at: String,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub(crate) struct TagItem {
     pub(crate) id: String,
     pub(crate) name: String,
@@ -130,6 +152,16 @@ pub(crate) struct AppSettings {
     pub(crate) english_font_family: String,
     #[serde(default = "default_monospace_font_family")]
     pub(crate) monospace_font_family: String,
+    #[serde(default)]
+    pub(crate) image_library_path: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ImportedImageFile {
+    pub(crate) file_name: String,
+    pub(crate) original_name: String,
+    pub(crate) path: String,
 }
 
 fn default_chinese_font_family() -> String {

@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 
 use super::{open_database, read::load_structured_data};
 use crate::defaults::default_app_data;
-use crate::models::{AppData, AppSettings, CanvasItem, DrawingItem, StickyNote, TagItem};
+use crate::models::{AppData, AppSettings, CanvasImage, CanvasItem, DrawingItem, StickyNote, TagItem};
 
 pub(crate) fn save_structured_data(
     conn: &mut Connection,
@@ -19,6 +19,8 @@ pub(crate) fn save_structured_data(
     tx.execute("DELETE FROM notes", [])
         .map_err(|error| error.to_string())?;
     tx.execute("DELETE FROM drawings", [])
+        .map_err(|error| error.to_string())?;
+    tx.execute("DELETE FROM images", [])
         .map_err(|error| error.to_string())?;
     tx.execute("DELETE FROM tags", [])
         .map_err(|error| error.to_string())?;
@@ -78,6 +80,11 @@ pub(crate) fn save_structured_data(
         params![app_data.settings.monospace_font_family],
     )
     .map_err(|error| error.to_string())?;
+    tx.execute(
+        "INSERT INTO app_meta (key, value) VALUES ('image_library_path', ?1)",
+        params![app_data.settings.image_library_path],
+    )
+    .map_err(|error| error.to_string())?;
 
     for canvas in &app_data.canvases {
         tx.execute(
@@ -109,6 +116,10 @@ pub(crate) fn save_structured_data(
 
     for drawing in &app_data.drawings {
         insert_drawing(&tx, drawing)?;
+    }
+
+    for image in &app_data.images {
+        insert_image(&tx, image)?;
     }
 
     for note in &app_data.notes {
@@ -187,6 +198,23 @@ fn insert_drawing(conn: &Connection, drawing: &DrawingItem) -> Result<(), String
     Ok(())
 }
 
+fn insert_image(conn: &Connection, image: &CanvasImage) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO images (id, canvas_id, data, z_index, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            image.id,
+            image.canvas_id,
+            serde_json::to_string(image).map_err(|error| error.to_string())?,
+            image.z_index,
+            image.created_at,
+            image.updated_at
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub(crate) fn upsert_canvas(conn: &Connection, canvas: &CanvasItem) -> Result<(), String> {
     conn.execute(
         "INSERT INTO canvases (id, name, description, created_at, updated_at, sort_order, deleted_at, viewport_offset_x, viewport_offset_y, viewport_scale)
@@ -247,6 +275,28 @@ pub(crate) fn upsert_drawing(conn: &Connection, drawing: &DrawingItem) -> Result
             drawing.z_index,
             drawing.created_at,
             drawing.updated_at
+        ],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub(crate) fn upsert_image(conn: &Connection, image: &CanvasImage) -> Result<(), String> {
+    conn.execute(
+        "INSERT INTO images (id, canvas_id, data, z_index, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(id) DO UPDATE SET
+            canvas_id = excluded.canvas_id,
+            data = excluded.data,
+            z_index = excluded.z_index,
+            updated_at = excluded.updated_at",
+        params![
+            image.id,
+            image.canvas_id,
+            serde_json::to_string(image).map_err(|error| error.to_string())?,
+            image.z_index,
+            image.created_at,
+            image.updated_at
         ],
     )
     .map_err(|error| error.to_string())?;
@@ -357,6 +407,7 @@ pub(crate) fn save_settings(conn: &Connection, settings: &AppSettings) -> Result
             "monospace_font_family",
             settings.monospace_font_family.clone(),
         ),
+        ("image_library_path", settings.image_library_path.clone()),
     ];
     for (key, value) in entries {
         conn.execute(
@@ -427,6 +478,12 @@ pub(crate) fn delete_drawing(conn: &Connection, id: String) -> Result<(), String
     Ok(())
 }
 
+pub(crate) fn delete_image(conn: &Connection, id: String) -> Result<(), String> {
+    conn.execute("DELETE FROM images WHERE id = ?1", params![id])
+        .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
 pub(crate) fn delete_drawings_by_canvas(
     conn: &Connection,
     canvas_id: String,
@@ -436,6 +493,12 @@ pub(crate) fn delete_drawings_by_canvas(
         params![canvas_id],
     )
     .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+pub(crate) fn delete_images_by_canvas(conn: &Connection, canvas_id: String) -> Result<(), String> {
+    conn.execute("DELETE FROM images WHERE canvas_id = ?1", params![canvas_id])
+        .map_err(|error| error.to_string())?;
     Ok(())
 }
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { open } from "@tauri-apps/plugin-dialog";
 import { X } from "lucide-vue-next";
+import CanvasImage from "./CanvasImage.vue";
 import CanvasToolbar from "./CanvasToolbar.vue";
 import DrawingLayer from "./DrawingLayer.vue";
 import MiniMap from "./MiniMap.vue";
@@ -12,10 +14,12 @@ import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useDrawingStore } from "../stores/drawingStore";
-import type { DrawingItem, DrawingPoint, NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
+import { useImageStore } from "../stores/imageStore";
+import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteColor, NoteDecoration, StickyNote as StickyNoteType, ViewportState } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 import { contentJsonToMarkdown } from "../utils/markdown";
+import { imageFileUrl, importImageFile } from "../utils/storage";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -24,6 +28,7 @@ const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
 const feedback = useFeedbackStore();
 const drawingStore = useDrawingStore();
+const imageStore = useImageStore();
 
 const board = ref<HTMLElement>();
 const viewport = reactive<ViewportState>({ offsetX: 0, offsetY: 0, scale: 1 });
@@ -31,7 +36,7 @@ const boardSize = reactive({ width: 0, height: 0 });
 const handActive = ref(false);
 const spaceDown = ref(false);
 const panStart = ref<{ x: number; y: number; offsetX: number; offsetY: number }>();
-const contextMenu = ref<{ x: number; y: number; noteId?: string; drawingId?: string; linkHref?: string; codeText?: string } | null>(null);
+const contextMenu = ref<{ x: number; y: number; noteId?: string; drawingId?: string; imageId?: string; linkHref?: string; codeText?: string } | null>(null);
 const contextWorld = ref<{ x: number; y: number }>({ x: 0, y: 0 });
 const highlightedNoteId = ref("");
 const boxSelect = ref<{ startX: number; startY: number; currentX: number; currentY: number } | null>(null);
@@ -43,6 +48,12 @@ const drawingDrag = ref<{ id: string; startX: number; startY: number; before: Dr
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
 const minBoxSelectDistance = 4;
+const imageDecorations: Array<{ value: NoteDecoration; label: string }> = [
+  { value: "none", label: "无" },
+  { value: "tape", label: "胶带" },
+  { value: "double-tape", label: "双胶带" },
+  { value: "corner-tape", label: "角贴" },
+];
 
 const visibleNotes = computed(() =>
   noteStore.notesForCanvas(canvasStore.currentCanvasId, tagStore.activeTagId, canvasStore.searchQuery),
@@ -50,6 +61,7 @@ const visibleNotes = computed(() =>
 
 const currentCanvasNotes = computed(() => noteStore.notesForCanvas(canvasStore.currentCanvasId));
 const currentCanvasDrawings = computed(() => drawingStore.drawingsForCanvas(canvasStore.currentCanvasId));
+const currentCanvasImages = computed(() => imageStore.imagesForCanvas(canvasStore.currentCanvasId));
 const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.searchQuery.trim()));
 const activeTag = computed(() => tagStore.activeTag);
 const searchText = computed(() => canvasStore.searchQuery.trim());
@@ -175,7 +187,7 @@ function isTextInputTarget(target: EventTarget | null) {
 
 function isCanvasBlankTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
-  return !target.closest(".sticky-note, .toolbar, .minimap, .menu-popover, .empty-board, .filter-status");
+  return !target.closest(".sticky-note, .canvas-image, .toolbar, .minimap, .menu-popover, .empty-board, .filter-status");
 }
 
 function isCanvasControlTarget(target: EventTarget | null) {
@@ -201,10 +213,11 @@ function onBoardMouseDown(event: MouseEvent) {
       return;
     }
     if (!isCanvasControlTarget(event.target) && blankTarget) {
-      clearSelectionAfterTinyDrawing.value = Boolean(noteStore.selectedIds.length || drawingStore.selectedIds.length);
+      clearSelectionAfterTinyDrawing.value = Boolean(noteStore.selectedIds.length || drawingStore.selectedIds.length || imageStore.selectedIds.length);
       startDrawing(event);
     }
     noteStore.clearSelection();
+    imageStore.clearSelection();
     return;
   }
   if (noteStore.editingId && blankTarget) noteStore.stopEditing();
@@ -216,11 +229,13 @@ function onBoardMouseDown(event: MouseEvent) {
     if (event.button === 0) {
       noteStore.clearSelection();
       drawingStore.clearSelection();
+      imageStore.clearSelection();
       startBoxSelect(event);
       return;
     }
     noteStore.clearSelection();
     drawingStore.clearSelection();
+    imageStore.clearSelection();
   }
 }
 
@@ -308,6 +323,7 @@ function openCanvasMenu(event: MouseEvent) {
 
 function openNoteMenu(event: MouseEvent, id: string, payload?: { linkHref?: string; codeText?: string }) {
   drawingStore.clearSelection();
+  imageStore.clearSelection();
   noteStore.select(id);
   if (board.value) {
     const rect = board.value.getBoundingClientRect();
@@ -318,12 +334,20 @@ function openNoteMenu(event: MouseEvent, id: string, payload?: { linkHref?: stri
 
 function openDrawingMenu(event: MouseEvent, id: string) {
   noteStore.clearSelection();
+  imageStore.clearSelection();
   if (!drawingStore.selectedIds.includes(id)) drawingStore.select(id);
   if (board.value) {
     const rect = board.value.getBoundingClientRect();
     contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
   }
   contextMenu.value = { x: event.clientX, y: event.clientY, drawingId: id };
+}
+
+function openImageMenu(event: MouseEvent, id: string) {
+  noteStore.clearSelection();
+  drawingStore.clearSelection();
+  if (!imageStore.selectedIds.includes(id)) imageStore.select(id);
+  contextMenu.value = { x: event.clientX, y: event.clientY, imageId: id };
 }
 
 function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
@@ -337,7 +361,10 @@ function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
   if (handActive.value || spaceDown.value || event.button === 1) return;
   const additive = event.shiftKey || event.ctrlKey;
   const alreadySelected = noteStore.selectedIds.includes(note.id);
-  if (!additive && !alreadySelected) drawingStore.clearSelection();
+  if (!additive && !alreadySelected) {
+    drawingStore.clearSelection();
+    imageStore.clearSelection();
+  }
   if (!alreadySelected || additive) noteStore.select(note.id, additive);
   if (selectedObjectCount() > 1 && noteStore.selectedIds.includes(note.id)) {
     startMixedDrag(event);
@@ -355,7 +382,7 @@ function onNotePointerDown(event: MouseEvent, note: StickyNoteType) {
 }
 
 function selectedObjectCount() {
-  return noteStore.selectedIds.length + drawingStore.selectedIds.length;
+  return noteStore.selectedIds.length + drawingStore.selectedIds.length + imageStore.selectedIds.length;
 }
 
 function startMixedDrag(event: MouseEvent) {
@@ -410,11 +437,13 @@ function deleteSelectedDrawing() {
 function deleteSelectedObjects() {
   if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
   if (noteStore.selectedIds.length) noteStore.deleteSelected();
+  if (imageStore.selectedIds.length) imageStore.deleteSelected();
 }
 
 function clearObjectSelection() {
   noteStore.clearSelection();
   drawingStore.clearSelection();
+  imageStore.clearSelection();
 }
 
 function startDrawingDrag(event: MouseEvent, drawingId: string) {
@@ -426,7 +455,10 @@ function startDrawingDrag(event: MouseEvent, drawingId: string) {
   const alreadySelected = drawingStore.selectedIds.includes(drawingId);
   const additive = event.shiftKey || event.ctrlKey;
   if (!alreadySelected) {
-    if (!additive) noteStore.clearSelection();
+    if (!additive) {
+      noteStore.clearSelection();
+      imageStore.clearSelection();
+    }
     drawingStore.select(drawingId, additive);
   }
   if (selectedObjectCount() > 1 && drawingStore.selectedIds.includes(drawingId)) {
@@ -500,6 +532,71 @@ function endDrawingEdit() {
   drawingEdit.value = null;
 }
 
+function onImagePointerDown(event: MouseEvent, image: CanvasImageType) {
+  if (drawingStore.tool !== "select") return;
+  if (handActive.value || spaceDown.value || event.button === 1) return;
+  noteStore.clearSelection();
+  drawingStore.clearSelection();
+  imageStore.select(image.id);
+}
+
+function updateImage(image: CanvasImageType, patch: Partial<CanvasImageType> & { __before?: CanvasImageType }, track = true) {
+  const { __before, ...cleanPatch } = patch;
+  if (__before) imageStore.commitImageChange(__before, cleanPatch);
+  else imageStore.updateImage(image.id, cleanPatch, track);
+}
+
+async function addImageAt(clientX?: number, clientY?: number) {
+  if (!canvasStore.currentCanvasId || !board.value) return;
+  const selected = await open({
+    multiple: false,
+    directory: false,
+    filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"] }],
+  });
+  if (typeof selected !== "string") return;
+  try {
+    const imported = await importImageFile(selected, settingsStore.settings.imageLibraryPath);
+    const size = await measureImageSize(imageFileUrl(imported.path));
+    const rect = board.value.getBoundingClientRect();
+    const point = clientX !== undefined && clientY !== undefined
+      ? screenToWorld(clientX, clientY, viewport, rect)
+      : screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
+    imageStore.createImage(canvasStore.currentCanvasId, {
+      fileName: imported.fileName,
+      originalName: imported.originalName,
+      x: point.x - size.width / 2,
+      y: point.y - size.height / 2,
+      width: size.width,
+      height: size.height,
+      rotationEnabled: settingsStore.settings.randomRotation,
+    });
+    noteStore.clearSelection();
+    drawingStore.clearSelection();
+  } catch (error) {
+    feedback.notify(`添加图片失败：${error instanceof Error ? error.message : String(error)}`, "error");
+  }
+}
+
+function measureImageSize(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    if (!src) {
+      resolve({ width: 320, height: 240 });
+      return;
+    }
+    const image = new Image();
+    image.onload = () => {
+      const maxSize = 420;
+      const ratio = Math.min(1, maxSize / Math.max(image.naturalWidth || maxSize, image.naturalHeight || maxSize));
+      resolve({
+        width: Math.max(120, Math.round((image.naturalWidth || 280) * ratio)),
+        height: Math.max(120, Math.round((image.naturalHeight || 220) * ratio)),
+      });
+    };
+    image.onerror = () => resolve({ width: 320, height: 240 });
+    image.src = src;
+  });
+}
+
 function cloneDrawing(drawing: DrawingItem): DrawingItem {
   return {
     ...drawing,
@@ -510,6 +607,11 @@ function cloneDrawing(drawing: DrawingItem): DrawingItem {
 }
 
 function undo() {
+  const preferImage = Boolean(imageStore.selectedIds.length);
+  if (preferImage) {
+    if (!imageStore.undo() && !drawingStore.undo() && noteStore.history.length) noteStore.undo();
+    return;
+  }
   const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select");
   if (preferDrawing) {
     if (!drawingStore.undo() && noteStore.history.length) noteStore.undo();
@@ -520,6 +622,10 @@ function undo() {
 }
 
 function redo() {
+  if (imageStore.selectedIds.length) {
+    if (!imageStore.redo() && !drawingStore.redo() && noteStore.future.length) noteStore.redo();
+    return;
+  }
   const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length));
   if (preferDrawing) {
     if (!drawingStore.redo() && noteStore.future.length) noteStore.redo();
@@ -601,6 +707,11 @@ function pasteAtContext() {
 function changeDrawingColorForContext(color: string) {
   drawingStore.color = color;
   if (drawingStore.selectedIds.length) drawingStore.updateSelected({ color });
+  contextMenu.value = null;
+}
+
+function changeImageDecorationForContext(decoration: NoteDecoration) {
+  if (contextMenu.value?.imageId) imageStore.updateImage(contextMenu.value.imageId, { decoration });
   contextMenu.value = null;
 }
 
@@ -696,8 +807,16 @@ function finishBoxSelect() {
     const drawingBottom = bounds.maxY * viewport.scale + viewport.offsetY;
     return drawingRight >= left && drawingLeft <= right && drawingBottom >= top && drawingTop <= bottom;
   });
+  const selectedImages = currentCanvasImages.value.filter((image) => {
+    const imageLeft = image.x * viewport.scale + viewport.offsetX;
+    const imageTop = image.y * viewport.scale + viewport.offsetY;
+    const imageRight = imageLeft + image.width * viewport.scale;
+    const imageBottom = imageTop + image.height * viewport.scale;
+    return imageRight >= left && imageLeft <= right && imageBottom >= top && imageTop <= bottom;
+  });
   noteStore.setSelection(selectedNotes.map((note) => note.id));
   drawingStore.setSelection(selectedDrawings.map((drawing) => drawing.id));
+  imageStore.selectedIds = selectedImages.map((image) => image.id);
   boxSelect.value = null;
 }
 
@@ -767,7 +886,7 @@ function onKeydown(event: KeyboardEvent) {
     }
     return;
   }
-  if ((event.key === "Delete" || event.key === "Backspace") && (drawingStore.selectedIds.length || noteStore.selectedIds.length) && !noteStore.editingId) {
+  if ((event.key === "Delete" || event.key === "Backspace") && (drawingStore.selectedIds.length || noteStore.selectedIds.length || imageStore.selectedIds.length) && !noteStore.editingId) {
     event.preventDefault();
     deleteSelectedObjects();
     return;
@@ -870,7 +989,7 @@ watch(
       当前筛选下没有便签<br />
       <button @click.stop="clearFilters">清除筛选</button>
     </div>
-    <div v-else-if="!visibleNotes.length && !currentCanvasDrawings.length" class="empty-board">双击画布空白处创建第一张便签</div>
+    <div v-else-if="!visibleNotes.length && !currentCanvasDrawings.length && !currentCanvasImages.length" class="empty-board">双击画布空白处创建第一张便签</div>
 
     <div v-if="appStore.databaseReady && filterActive" class="filter-status" @mousedown.stop @dblclick.stop>
       <span v-if="activeTag" class="tag-filter">
@@ -891,6 +1010,20 @@ watch(
         @drag-drawing="startDrawingDrag"
         @edit-drawing="startDrawingEdit"
         @context-drawing="openDrawingMenu"
+      />
+      <CanvasImage
+        v-for="image in currentCanvasImages"
+        :key="image.id"
+        :image="image"
+        :selected="imageStore.selectedIds.includes(image.id)"
+        :scale="viewport.scale"
+        :library-path="settingsStore.settings.imageLibraryPath"
+        :pan-mode="handActive || spaceDown || drawingStore.tool !== 'select'"
+        @select="onImagePointerDown($event, image)"
+        @update="(patch, track) => updateImage(image, patch, track)"
+        @live="(patch) => imageStore.patchImageLive(image.id, patch)"
+        @delete="imageStore.deleteImage(image.id)"
+        @context="(event) => openImageMenu(event, image.id)"
       />
       <StickyNote
         v-for="note in visibleNotes"
@@ -938,6 +1071,7 @@ watch(
       @set-drawing-color="setDrawingColor"
       @set-drawing-stroke-width="setDrawingStrokeWidth"
       @delete-drawing="deleteSelectedDrawing"
+      @add-image="addImageAt()"
       @settings="settingsStore.togglePanel()"
     />
 
@@ -999,8 +1133,22 @@ watch(
           </div>
         </div>
       </template>
+      <template v-else-if="contextMenu.imageId">
+        <button @click="imageStore.deleteImage(contextMenu!.imageId!); contextMenu = null">删除</button>
+        <div class="context-section">
+          <span>装饰</span>
+          <button
+            v-for="option in imageDecorations"
+            :key="option.value"
+            @click="changeImageDecorationForContext(option.value)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+      </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
+        <button @click="addImageAt(contextMenu!.x, contextMenu!.y); contextMenu = null">添加图片</button>
         <button :disabled="!noteStore.clipboard.length && !drawingStore.clipboard.length" @click="pasteAtContext">粘贴</button>
         <button @click="fitView(); contextMenu = null">适应视图</button>
         <button @click="resetZoom(); contextMenu = null">重置缩放</button>

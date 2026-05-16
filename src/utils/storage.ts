@@ -1,5 +1,5 @@
-import type { AppData, AppSettings, CanvasItem, DrawingItem, StickyNote, TagItem } from "../types";
-import { invoke } from "@tauri-apps/api/core";
+import type { AppData, AppSettings, CanvasImage, CanvasItem, DrawingItem, StickyNote, TagItem } from "../types";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export interface DatabaseLoadResult {
   data: string;
@@ -16,6 +16,7 @@ export const defaultSettings: AppSettings = {
   chineseFontFamily: "Xiaolai, Microsoft YaHei",
   englishFontFamily: "Segoe Print, Comic Sans MS",
   monospaceFontFamily: "Consolas, Cascadia Mono, monospace",
+  imageLibraryPath: "",
 };
 
 export function normalizeSettings(settings?: Partial<AppSettings>): AppSettings {
@@ -33,6 +34,7 @@ export function parseData(raw: string): AppData {
   }
   parsed.settings = normalizeSettings(parsed.settings);
   parsed.drawings = Array.isArray(parsed.drawings) ? parsed.drawings : [];
+  parsed.images = Array.isArray(parsed.images) ? parsed.images : [];
   parsed.canvases = normalizeCanvases(parsed.canvases);
   parsed.tags = normalizeTags(Array.isArray(parsed.tags) ? parsed.tags : []);
   return parsed;
@@ -106,6 +108,40 @@ export async function deleteDrawingData(id: string) {
 
 export async function deleteDrawingsByCanvasData(canvasId: string) {
   await invoke("delete_drawings_by_canvas", { canvasId });
+}
+
+export async function saveImageData(image: CanvasImage) {
+  await invoke("save_image", { image: JSON.stringify(image) });
+}
+
+export async function deleteImageData(id: string) {
+  await invoke("delete_image", { id });
+}
+
+export async function deleteImagesByCanvasData(canvasId: string) {
+  await invoke("delete_images_by_canvas", { canvasId });
+}
+
+export interface ImportedImageFile {
+  fileName: string;
+  originalName: string;
+  path: string;
+}
+
+export async function importImageFile(sourcePath: string, libraryPath: string): Promise<ImportedImageFile> {
+  return invoke<ImportedImageFile>("import_image_file", { sourcePath, libraryPath });
+}
+
+export async function resolveImagePath(fileName: string, libraryPath: string): Promise<string | null> {
+  return invoke<string | null>("resolve_image_path", { fileName, libraryPath });
+}
+
+export async function defaultImageLibraryPath(): Promise<string> {
+  return invoke<string>("default_image_library");
+}
+
+export function imageFileUrl(path: string) {
+  return convertFileSrc(path);
 }
 
 export async function saveTagData(tag: TagItem) {

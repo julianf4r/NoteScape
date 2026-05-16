@@ -25,12 +25,18 @@ pub fn run() {
             commands::save_drawing,
             commands::delete_drawing,
             commands::delete_drawings_by_canvas,
+            commands::save_image,
+            commands::delete_image,
+            commands::delete_images_by_canvas,
             commands::save_tag,
             commands::delete_tag,
             commands::save_app_settings,
             commands::backup_database,
             commands::export_json_file,
-            commands::import_json_file
+            commands::import_json_file,
+            commands::import_image_file,
+            commands::resolve_image_path,
+            commands::default_image_library
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

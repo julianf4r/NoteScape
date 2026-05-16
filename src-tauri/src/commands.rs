@@ -5,10 +5,12 @@ use tauri::AppHandle;
 
 use crate::db;
 use crate::models::{
-    AppSettings, CanvasItem, DatabaseLoadResult, DrawingItem, StickyNote, TagItem,
+    AppSettings, CanvasImage, CanvasItem, DatabaseLoadResult, DrawingItem, ImportedImageFile,
+    StickyNote, TagItem,
 };
 use crate::paths::{
-    current_database_path, default_db_path, read_database_path, write_database_path,
+    current_database_path, default_db_path, default_image_library_path, read_database_path,
+    write_database_path,
 };
 
 #[tauri::command]
@@ -110,6 +112,28 @@ pub(crate) fn save_drawing(app: AppHandle, drawing: String) -> Result<(), String
 }
 
 #[tauri::command]
+pub(crate) fn save_image(app: AppHandle, image: String) -> Result<(), String> {
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    let image: CanvasImage = serde_json::from_str(&image).map_err(|error| error.to_string())?;
+    db::upsert_image(&conn, &image)
+}
+
+#[tauri::command]
+pub(crate) fn delete_image(app: AppHandle, id: String) -> Result<(), String> {
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    db::delete_image(&conn, id)
+}
+
+#[tauri::command]
+pub(crate) fn delete_images_by_canvas(app: AppHandle, canvas_id: String) -> Result<(), String> {
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    db::delete_images_by_canvas(&conn, canvas_id)
+}
+
+#[tauri::command]
 pub(crate) fn delete_drawing(app: AppHandle, id: String) -> Result<(), String> {
     let db_path = current_database_path(&app)?;
     let conn = db::open_database(&db_path)?;
@@ -163,6 +187,70 @@ pub(crate) fn export_json_file(path: String, data: String) -> Result<(), String>
 pub(crate) fn import_json_file(path: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|error| error.to_string())
 }
+
+#[tauri::command]
+pub(crate) fn import_image_file(
+    app: AppHandle,
+    source_path: String,
+    library_path: String,
+) -> Result<ImportedImageFile, String> {
+    let source = PathBuf::from(&source_path);
+    if !source.exists() {
+        return Err("图片文件不存在".to_string());
+    }
+    let library = image_library_path(&app, &library_path)?;
+    fs::create_dir_all(&library).map_err(|error| error.to_string())?;
+    let original_name = source
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("image")
+        .to_string();
+    let extension = source
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!(".{}", value.to_ascii_lowercase()))
+        .unwrap_or_default();
+    let file_name = format!("{}{}", unique_file_stem(), extension);
+    let target = library.join(&file_name);
+    fs::copy(&source, &target).map_err(|error| error.to_string())?;
+    Ok(ImportedImageFile {
+        file_name,
+        original_name,
+        path: target.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+pub(crate) fn resolve_image_path(
+    app: AppHandle,
+    file_name: String,
+    library_path: String,
+) -> Result<Option<String>, String> {
+    let library = image_library_path(&app, &library_path)?;
+    let path = library.join(file_name);
+    Ok(path.exists().then(|| path.to_string_lossy().to_string()))
+}
+
+#[tauri::command]
+pub(crate) fn default_image_library(app: AppHandle) -> Result<String, String> {
+    Ok(default_image_library_path(&app)?.to_string_lossy().to_string())
+}
+
+fn image_library_path(app: &AppHandle, library_path: &str) -> Result<PathBuf, String> {
+    if library_path.trim().is_empty() {
+        return default_image_library_path(app);
+    }
+    Ok(PathBuf::from(library_path))
+}
+
+fn unique_file_stem() -> String {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or_default();
+    format!("img-{nanos}")
+}
+
 
 #[tauri::command]
 pub(crate) fn set_database_path(

@@ -5,7 +5,7 @@ use rusqlite::{params, Connection, OptionalExtension};
 use super::{open_database, parse_app_data, write::save_structured_data};
 use crate::defaults::default_app_data_json;
 use crate::models::{
-    AppData, AppSettings, CanvasItem, ChecklistItem, DrawingItem, StickyNote, TagItem,
+    AppData, AppSettings, CanvasImage, CanvasItem, ChecklistItem, DrawingItem, StickyNote, TagItem,
     ViewportState,
 };
 
@@ -36,10 +36,12 @@ pub(crate) fn load_structured_data(conn: &Connection) -> Result<AppData, String>
             .unwrap_or_else(|| "Segoe Print, Comic Sans MS".to_string()),
         monospace_font_family: meta_value(conn, "monospace_font_family")?
             .unwrap_or_else(|| "Consolas, Cascadia Mono, monospace".to_string()),
+        image_library_path: meta_value(conn, "image_library_path")?.unwrap_or_default(),
     };
 
     let canvases = load_canvases(conn)?;
     let drawings = load_drawings(conn)?;
+    let images = load_images(conn)?;
     let tags = load_tags(conn)?;
     let mut notes = load_notes(conn)?;
 
@@ -53,6 +55,7 @@ pub(crate) fn load_structured_data(conn: &Connection) -> Result<AppData, String>
         canvases,
         notes,
         drawings,
+        images,
         tags,
         settings,
     })
@@ -228,6 +231,30 @@ fn load_drawings(conn: &Connection) -> Result<Vec<DrawingItem>, String> {
         .query_map([], |row| {
             let data: String = row.get(0)?;
             serde_json::from_str::<DrawingItem>(&data).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn load_images(conn: &Connection) -> Result<Vec<CanvasImage>, String> {
+    let mut statement = conn
+        .prepare(
+            "SELECT data
+             FROM images
+             ORDER BY z_index ASC, created_at ASC",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| {
+            let data: String = row.get(0)?;
+            serde_json::from_str::<CanvasImage>(&data).map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
                     0,
                     rusqlite::types::Type::Text,

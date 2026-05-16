@@ -6,6 +6,7 @@ import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
 import { useNoteStore } from "../stores/noteStore";
 import { useDrawingStore } from "../stores/drawingStore";
+import { useImageStore } from "../stores/imageStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
@@ -15,6 +16,7 @@ const appStore = useAppStore();
 const canvasStore = useCanvasStore();
 const noteStore = useNoteStore();
 const drawingStore = useDrawingStore();
+const imageStore = useImageStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
 const feedback = useFeedbackStore();
@@ -169,6 +171,7 @@ async function removeForever(id: string, name: string) {
   if (!(await feedback.confirm(`永久删除画布“${name}”？此操作会删除其中所有便签，且无法撤销。`))) return;
   noteStore.removeNotesByCanvas(id);
   drawingStore.removeDrawingsByCanvas(id);
+  imageStore.removeImagesByCanvas(id);
   canvasStore.removeForever(id);
   feedback.notify("画布已永久删除", "success");
 }

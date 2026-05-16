@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { Download, Upload, X } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useAppStore } from "../stores/appStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
-import { backupDatabase, exportJsonFile, importJsonFile } from "../utils/storage";
+import { backupDatabase, defaultImageLibraryPath, exportJsonFile, importJsonFile } from "../utils/storage";
 
 const appStore = useAppStore();
 const feedback = useFeedbackStore();
 const settingsStore = useSettingsStore();
+const defaultImagePath = ref("");
 
 const settings = computed(() => settingsStore.settings);
+const imageLibraryDisplayPath = computed(() => settings.value.imageLibraryPath || defaultImagePath.value || "默认图片目录");
+
+onMounted(async () => {
+  defaultImagePath.value = await defaultImageLibraryPath();
+});
 
 async function exportData() {
   if (!appStore.databaseReady) {
@@ -110,6 +116,19 @@ async function backupCurrentDatabase() {
   }
 }
 
+async function chooseImageLibrary() {
+  const selected = await open({
+    multiple: false,
+    directory: true,
+  });
+  if (typeof selected !== "string") return;
+  settingsStore.updateSettings({ imageLibraryPath: selected });
+}
+
+function useDefaultImageLibrary() {
+  settingsStore.updateSettings({ imageLibraryPath: "" });
+}
+
 </script>
 
 <template>
@@ -177,6 +196,15 @@ async function backupCurrentDatabase() {
         <div class="actions">
           <button :disabled="!appStore.databaseReady" @click="exportData"><Download :size="16" />导出数据</button>
           <button :disabled="!appStore.databaseReady" @click="importFromFile"><Upload :size="16" />导入文件</button>
+        </div>
+      </section>
+
+      <section>
+        <h3>图片</h3>
+        <div class="db-path">{{ imageLibraryDisplayPath }}</div>
+        <div class="actions">
+          <button @click="chooseImageLibrary">选择目录</button>
+          <button @click="useDefaultImageLibrary">使用默认</button>
         </div>
       </section>
     </aside>
