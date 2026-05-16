@@ -35,6 +35,7 @@ pub fn run() {
             commands::export_json_file,
             commands::import_json_file,
             commands::import_image_file,
+            commands::import_image_bytes,
             commands::resolve_image_path,
             commands::default_image_library
         ])

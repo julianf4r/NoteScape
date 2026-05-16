@@ -269,6 +269,57 @@ pub(crate) fn import_image_file(
 }
 
 #[tauri::command]
+pub(crate) fn import_image_bytes(
+    app: AppHandle,
+    bytes: Vec<u8>,
+    original_name: String,
+    mime_type: String,
+    library_path: String,
+) -> Result<ImportedImageFile, String> {
+    if bytes.is_empty() {
+        return Err("图片内容为空".to_string());
+    }
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    let content_hash = bytes_hash(&bytes);
+    let library = image_library_path(&app, &library_path)?;
+    fs::create_dir_all(&library).map_err(|error| error.to_string())?;
+    let clean_original_name = if original_name.trim().is_empty() {
+        "clipboard-image".to_string()
+    } else {
+        original_name
+    };
+    if let Some((file_name, stored_original_name)) = image_asset_by_hash(&conn, &content_hash)? {
+        let target = library.join(&file_name);
+        if !target.exists() {
+            fs::write(&target, &bytes).map_err(|error| error.to_string())?;
+        }
+        return Ok(ImportedImageFile {
+            file_name,
+            original_name: stored_original_name,
+            content_hash,
+            path: target.to_string_lossy().to_string(),
+        });
+    }
+    let extension = image_extension(&mime_type, &clean_original_name);
+    let file_name = format!("{}{}", unique_file_stem(), extension);
+    let target = library.join(&file_name);
+    fs::write(&target, &bytes).map_err(|error| error.to_string())?;
+    conn.execute(
+        "INSERT INTO image_assets (content_hash, file_name, original_name, ref_count, created_at)
+         VALUES (?1, ?2, ?3, 0, ?4)",
+        params![content_hash, file_name, clean_original_name, now_iso()],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(ImportedImageFile {
+        file_name,
+        original_name: clean_original_name,
+        content_hash,
+        path: target.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
 pub(crate) fn resolve_image_path(
     app: AppHandle,
     file_name: String,
@@ -414,8 +465,31 @@ fn count_image_references(conn: &Connection, file_name: &str) -> Result<i64, Str
 
 fn file_hash(path: &Path) -> Result<String, String> {
     let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    Ok(bytes_hash(&bytes))
+}
+
+fn bytes_hash(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn image_extension(mime_type: &str, original_name: &str) -> String {
+    let from_name = Path::new(original_name)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| format!(".{}", value.to_ascii_lowercase()));
+    if let Some(extension) = from_name {
+        return extension;
+    }
+    match mime_type {
+        "image/jpeg" => ".jpg".to_string(),
+        "image/png" => ".png".to_string(),
+        "image/webp" => ".webp".to_string(),
+        "image/gif" => ".gif".to_string(),
+        "image/bmp" => ".bmp".to_string(),
+        "image/svg+xml" => ".svg".to_string(),
+        _ => ".png".to_string(),
+    }
 }
 
 fn now_iso() -> String {

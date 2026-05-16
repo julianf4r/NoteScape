@@ -21,7 +21,7 @@ import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteCol
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 import { contentJsonToMarkdown } from "../utils/markdown";
-import { imageFileUrl, importImageFile } from "../utils/storage";
+import { imageFileUrl, importImageBytes, importImageFile } from "../utils/storage";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -573,26 +573,49 @@ async function addImageFileAt(sourcePath: string, clientX?: number, clientY?: nu
   if (!canvasStore.currentCanvasId || !board.value || !isImagePath(sourcePath)) return;
   try {
     const imported = await importImageFile(sourcePath, settingsStore.settings.imageLibraryPath);
-    const size = await measureImageSize(imageFileUrl(imported.path));
-    const rect = board.value.getBoundingClientRect();
-    const point = clientX !== undefined && clientY !== undefined
-      ? screenToWorld(clientX, clientY, viewport, rect)
-      : screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
-    imageStore.createImage(canvasStore.currentCanvasId, {
-      fileName: imported.fileName,
-      originalName: imported.originalName,
-      contentHash: imported.contentHash,
-      x: point.x - size.width / 2 + index * 18,
-      y: point.y - size.height / 2 + index * 18,
-      width: size.width,
-      height: size.height,
-      rotationEnabled: settingsStore.settings.randomRotation,
-    });
-    noteStore.clearSelection();
-    drawingStore.clearSelection();
+    await createImportedImage(imported, clientX, clientY, index);
   } catch (error) {
     feedback.notify(`添加图片失败：${error instanceof Error ? error.message : String(error)}`, "error");
   }
+}
+
+async function addImageBlobAt(blob: Blob, clientX?: number, clientY?: number, index = 0) {
+  if (!canvasStore.currentCanvasId || !board.value || !blob.type.startsWith("image/")) return false;
+  try {
+    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+    const imported = await importImageBytes(bytes, imageNameFromBlob(blob), blob.type, settingsStore.settings.imageLibraryPath);
+    await createImportedImage(imported, clientX, clientY, index);
+    return true;
+  } catch (error) {
+    feedback.notify(`粘贴图片失败：${error instanceof Error ? error.message : String(error)}`, "error");
+    return false;
+  }
+}
+
+async function createImportedImage(imported: Awaited<ReturnType<typeof importImageFile>>, clientX?: number, clientY?: number, index = 0) {
+  if (!canvasStore.currentCanvasId || !board.value) return;
+  const size = await measureImageSize(imageFileUrl(imported.path));
+  const rect = board.value.getBoundingClientRect();
+  const point = clientX !== undefined && clientY !== undefined
+    ? screenToWorld(clientX, clientY, viewport, rect)
+    : screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
+  imageStore.createImage(canvasStore.currentCanvasId, {
+    fileName: imported.fileName,
+    originalName: imported.originalName,
+    contentHash: imported.contentHash,
+    x: point.x - size.width / 2 + index * 18,
+    y: point.y - size.height / 2 + index * 18,
+    width: size.width,
+    height: size.height,
+    rotationEnabled: settingsStore.settings.randomRotation,
+  });
+  noteStore.clearSelection();
+  drawingStore.clearSelection();
+}
+
+function imageNameFromBlob(blob: Blob) {
+  const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg") || "png";
+  return `clipboard-image.${extension}`;
 }
 
 function isImagePath(path: string) {
@@ -624,6 +647,31 @@ async function onNativeDrop(event: DragEvent) {
     .filter((path): path is string => Boolean(path));
   if (!paths.length) return;
   await addDroppedImages(paths, event.clientX, event.clientY);
+}
+
+async function onPaste(event: ClipboardEvent) {
+  if (isTextInputTarget(event.target) || noteStore.editingId || !canvasStore.currentCanvasId) return;
+  const clipboard = event.clipboardData;
+  const imageFiles = Array.from(clipboard?.files ?? []).filter((file) => file.type.startsWith("image/"));
+  if (!imageFiles.length && clipboard?.items) {
+    imageFiles.push(
+      ...Array.from(clipboard.items)
+        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file)),
+    );
+  }
+  if (imageFiles.length) {
+    event.preventDefault();
+    for (const [index, file] of imageFiles.entries()) {
+      await addImageBlobAt(file, undefined, undefined, index);
+    }
+    return;
+  }
+  if (noteStore.clipboard.length || drawingStore.clipboard.length || imageStore.clipboard.length) {
+    event.preventDefault();
+    pasteAtCenter();
+  }
 }
 
 async function startImageDropListener() {
@@ -704,6 +752,13 @@ function duplicateSelection(noteId: string) {
 }
 
 function copySelectedObjects() {
+  const hasNotes = Boolean(noteStore.selectedIds.length);
+  const hasDrawings = Boolean(drawingStore.selectedIds.length);
+  const hasImages = Boolean(imageStore.selectedIds.length);
+  noteStore.clipboard = [];
+  drawingStore.clipboard = [];
+  imageStore.clipboard = [];
+  if (!hasNotes && !hasDrawings && !hasImages) return;
   if (noteStore.selectedIds.length) noteStore.copySelected();
   if (drawingStore.selectedIds.length) drawingStore.copySelected();
   if (imageStore.selectedIds.length) imageStore.copySelected();
@@ -773,6 +828,15 @@ function pasteAtContext() {
   drawingStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
   imageStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
   contextMenu.value = null;
+}
+
+function pasteAtCenter() {
+  const rect = board.value?.getBoundingClientRect();
+  if (!rect || !canvasStore.currentCanvasId) return;
+  const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
+  noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
+  drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
+  imageStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
 }
 
 function changeDrawingColorForContext(color: string) {
@@ -977,15 +1041,6 @@ function onKeydown(event: KeyboardEvent) {
     event.preventDefault();
     resetZoom();
   }
-  if (event.ctrlKey && event.key.toLowerCase() === "v" && canvasStore.currentCanvasId && !noteStore.editingId) {
-    event.preventDefault();
-    const rect = board.value?.getBoundingClientRect();
-    if (!rect) return;
-    const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
-    noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
-    drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
-    imageStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
-  }
 }
 
 function onKeyup(event: KeyboardEvent) {
@@ -997,6 +1052,7 @@ onMounted(() => {
   void startImageDropListener().catch((error) => feedback.notify(`监听图片拖拽失败：${error instanceof Error ? error.message : String(error)}`, "error"));
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onKeyup);
+  window.addEventListener("paste", onPaste);
   window.addEventListener("locate-note", onLocateNote);
   window.addEventListener("resize", updateBoardSize);
 });
@@ -1008,6 +1064,7 @@ onUnmounted(() => {
   window.removeEventListener("mousemove", dragMixed);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
+  window.removeEventListener("paste", onPaste);
   window.removeEventListener("locate-note", onLocateNote);
   window.removeEventListener("resize", updateBoardSize);
   unlistenImageDrop?.();

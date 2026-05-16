@@ -133,6 +133,10 @@ export async function importImageFile(sourcePath: string, libraryPath: string): 
   return invoke<ImportedImageFile>("import_image_file", { sourcePath, libraryPath });
 }
 
+export async function importImageBytes(bytes: number[], originalName: string, mimeType: string, libraryPath: string): Promise<ImportedImageFile> {
+  return invoke<ImportedImageFile>("import_image_bytes", { bytes, originalName, mimeType, libraryPath });
+}
+
 export async function resolveImagePath(fileName: string, libraryPath: string): Promise<string | null> {
   return invoke<string | null>("resolve_image_path", { fileName, libraryPath });
 }
