@@ -42,6 +42,7 @@ const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
+const minBoxSelectDistance = 4;
 
 const visibleNotes = computed(() =>
   noteStore.notesForCanvas(canvasStore.currentCanvasId, tagStore.activeTagId, canvasStore.searchQuery),
@@ -675,6 +676,10 @@ function finishBoxSelect() {
   const top = Math.min(boxSelect.value.startY, boxSelect.value.currentY);
   const right = Math.max(boxSelect.value.startX, boxSelect.value.currentX);
   const bottom = Math.max(boxSelect.value.startY, boxSelect.value.currentY);
+  if (right - left < minBoxSelectDistance && bottom - top < minBoxSelectDistance) {
+    boxSelect.value = null;
+    return;
+  }
   const selectedNotes = visibleNotes.value.filter((note) => {
     const noteLeft = note.x * viewport.scale + viewport.offsetX;
     const noteTop = note.y * viewport.scale + viewport.offsetY;

@@ -423,7 +423,7 @@ function resizeHandlePoint(drawing: DrawingItem) {
 }
 
 .drawing-layer :deep(.drawing-shape) {
-  pointer-events: visiblePainted;
+  pointer-events: stroke;
 }
 
 .drawing-layer :deep(.selection-glow) {
