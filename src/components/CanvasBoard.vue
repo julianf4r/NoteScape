@@ -62,6 +62,7 @@ const currentCanvasImages = computed(() => imageStore.imagesForCanvas(canvasStor
 const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.searchQuery.trim()));
 const activeTag = computed(() => tagStore.activeTag);
 const searchText = computed(() => canvasStore.searchQuery.trim());
+type CanvasObjectType = "note" | "drawing" | "image";
 
 const canvasClass = computed(() => ({
   "hide-grid": !settingsStore.settings.showGrid,
@@ -319,9 +320,7 @@ function openCanvasMenu(event: MouseEvent) {
 }
 
 function openNoteMenu(event: MouseEvent, id: string, payload?: { linkHref?: string; codeText?: string }) {
-  drawingStore.clearSelection();
-  imageStore.clearSelection();
-  noteStore.select(id);
+  ensureContextSelection("note", id);
   if (board.value) {
     const rect = board.value.getBoundingClientRect();
     contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
@@ -330,9 +329,7 @@ function openNoteMenu(event: MouseEvent, id: string, payload?: { linkHref?: stri
 }
 
 function openDrawingMenu(event: MouseEvent, id: string) {
-  noteStore.clearSelection();
-  imageStore.clearSelection();
-  if (!drawingStore.selectedIds.includes(id)) drawingStore.select(id);
+  ensureContextSelection("drawing", id);
   if (board.value) {
     const rect = board.value.getBoundingClientRect();
     contextWorld.value = screenToWorld(event.clientX, event.clientY, viewport, rect);
@@ -341,10 +338,26 @@ function openDrawingMenu(event: MouseEvent, id: string) {
 }
 
 function openImageMenu(event: MouseEvent, id: string) {
-  noteStore.clearSelection();
-  drawingStore.clearSelection();
-  if (!imageStore.selectedIds.includes(id)) imageStore.select(id);
+  ensureContextSelection("image", id);
   contextMenu.value = { x: event.clientX, y: event.clientY, imageId: id };
+}
+
+function isObjectSelected(type: CanvasObjectType, id: string) {
+  if (type === "note") return noteStore.selectedIds.includes(id);
+  if (type === "drawing") return drawingStore.selectedIds.includes(id);
+  return imageStore.selectedIds.includes(id);
+}
+
+function selectSingleObject(type: CanvasObjectType, id: string) {
+  clearObjectSelection();
+  if (type === "note") noteStore.select(id);
+  else if (type === "drawing") drawingStore.select(id);
+  else imageStore.select(id);
+}
+
+function ensureContextSelection(type: CanvasObjectType, id: string) {
+  if (isObjectSelected(type, id)) return;
+  selectSingleObject(type, id);
 }
 
 function updateNote(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
@@ -424,10 +437,14 @@ function endGroupDrag() {
   groupDrag.value = null;
 }
 
-function deleteSelection(noteId: string) {
-  drawingStore.clearSelection();
-  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.deleteSelected();
-  else noteStore.deleteNote(noteId);
+function deleteObjectForContext(type: CanvasObjectType, id: string) {
+  if (isObjectSelected(type, id)) {
+    deleteSelectedObjects();
+    return;
+  }
+  if (type === "note") noteStore.deleteNote(id);
+  else if (type === "drawing") drawingStore.deleteDrawing(id);
+  else imageStore.deleteImage(id);
 }
 
 function deleteSelectedDrawing() {
@@ -746,9 +763,9 @@ function redo() {
   else if (!drawingStore.redo()) imageStore.redo();
 }
 
-function duplicateSelection(noteId: string) {
-  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.duplicateSelected();
-  else noteStore.duplicateNote(noteId);
+function duplicateObjectsForContext(type: CanvasObjectType, id: string) {
+  ensureContextSelection(type, id);
+  duplicateSelectedObjects();
 }
 
 function copySelectedObjects() {
@@ -773,6 +790,12 @@ function duplicateSelectedObjects() {
   if (imageStore.selectedIds.length) imageStore.duplicateSelected();
 }
 
+function bringSelectedObjectsToFront() {
+  if (noteStore.selectedIds.length) noteStore.bringSelectedToFront();
+  if (drawingStore.selectedIds.length) drawingStore.bringSelectedToFront();
+  if (imageStore.selectedIds.length) imageStore.bringSelectedToFront();
+}
+
 async function copyNoteText(noteId: string) {
   const note = noteStore.notes.find((item) => item.id === noteId);
   const text = (contentJsonToMarkdown(note?.contentJson) || note?.content?.trim()) ?? "";
@@ -794,14 +817,9 @@ async function copyCode(code: string) {
   feedback.notify("代码已复制", "success");
 }
 
-function bringSelectionToFront(noteId: string) {
-  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.bringSelectedToFront();
-  else noteStore.bringToFront(noteId);
-}
-
-function bringImageSelectionToFront(imageId: string) {
-  if (imageStore.selectedIds.length > 1 && imageStore.selectedIds.includes(imageId)) imageStore.bringSelectedToFront();
-  else imageStore.bringToFront(imageId);
+function bringObjectForContext(type: CanvasObjectType, id: string) {
+  ensureContextSelection(type, id);
+  bringSelectedObjectsToFront();
 }
 
 function updateSelection(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
@@ -1169,10 +1187,10 @@ watch(
         @edit="!handActive && drawingStore.tool === 'select' && (noteStore.editingId = note.id)"
         @update="(patch, track) => updateSelection(note, patch, track)"
         @live="(patch) => noteStore.patchNoteLive(note.id, patch)"
-        @delete="deleteSelection(note.id)"
-        @duplicate="duplicateSelection(note.id)"
+        @delete="deleteObjectForContext('note', note.id)"
+        @duplicate="duplicateObjectsForContext('note', note.id)"
         @copy-text="copyNoteText(note.id)"
-        @front="bringSelectionToFront(note.id)"
+        @front="bringObjectForContext('note', note.id)"
         @context="(event, payload) => openNoteMenu(event, note.id, payload)"
         @editing-done="noteStore.stopEditing()"
         @toggle-tag="(tagId) => toggleTagForSelection(note.id, tagId)"
@@ -1228,11 +1246,11 @@ watch(
         <button v-if="contextMenu.codeText" @click="copyCode(contextMenu!.codeText!); contextMenu = null">复制代码</button>
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
         <button @click="copyNoteText(contextMenu!.noteId!); contextMenu = null">复制文字</button>
-        <button @click="duplicateSelection(contextMenu!.noteId!); contextMenu = null">复制便签</button>
-        <button @click="bringSelectionToFront(contextMenu!.noteId!); contextMenu = null">
+        <button @click="duplicateObjectsForContext('note', contextMenu!.noteId!); contextMenu = null">复制一份</button>
+        <button @click="bringObjectForContext('note', contextMenu!.noteId!); contextMenu = null">
           {{ noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.pinned ? "取消置顶" : "置顶" }}
         </button>
-        <button @click="deleteSelection(contextMenu!.noteId!); contextMenu = null">删除</button>
+        <button @click="deleteObjectForContext('note', contextMenu!.noteId!); contextMenu = null">删除</button>
         <div class="context-section">
           <span>颜色</span>
           <div class="context-swatches">
@@ -1248,7 +1266,8 @@ watch(
       <template v-else-if="contextMenu.drawingId">
         <button @click="copySelectedObjects(); contextMenu = null">复制</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
-        <button @click="deleteSelectedDrawing(); contextMenu = null">删除</button>
+        <button @click="bringObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">置顶</button>
+        <button @click="deleteObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">删除</button>
         <div class="context-section">
           <span>颜色</span>
           <div class="context-swatches">
@@ -1264,10 +1283,10 @@ watch(
       <template v-else-if="contextMenu.imageId">
         <button @click="copySelectedObjects(); contextMenu = null">复制</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
-        <button @click="bringImageSelectionToFront(contextMenu!.imageId!); contextMenu = null">
+        <button @click="bringObjectForContext('image', contextMenu!.imageId!); contextMenu = null">
           {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.pinned ? "取消置顶" : "置顶" }}
         </button>
-        <button @click="imageStore.deleteImage(contextMenu!.imageId!); contextMenu = null">删除</button>
+        <button @click="deleteObjectForContext('image', contextMenu!.imageId!); contextMenu = null">删除</button>
       </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>

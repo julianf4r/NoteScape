@@ -178,6 +178,18 @@ export const useDrawingStore = defineStore("drawing", {
         saveDrawingSafely(drawing);
       });
     },
+    bringSelectedToFront() {
+      const selected = this.drawings.filter((drawing) => this.selectedIds.includes(drawing.id));
+      if (!selected.length) return;
+      const baseZ = this.maxZ;
+      selected.forEach((drawing, index) => {
+        const before = cloneDrawing(drawing);
+        drawing.zIndex = baseZ + index + 1;
+        drawing.updatedAt = now();
+        if (hasMeaningfulChange(before, drawing)) this.addHistory({ type: "update", before, after: cloneDrawing(drawing) });
+        saveDrawingSafely(drawing);
+      });
+    },
     pasteClipboard(canvasId: string, x: number, y: number) {
       if (!this.clipboard.length) return;
       const bounds = this.clipboard.map(drawingBounds).filter(Boolean) as Array<{ minX: number; minY: number }>;
