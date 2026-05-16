@@ -25,7 +25,7 @@ const mapHeight = 122;
 const padding = 60;
 
 const bounds = computed(() => {
-  const itemBounds = canvasItemBounds.value;
+  const itemBounds = [...miniNotes.value, ...miniDrawings.value, ...miniImages.value];
   if (!itemBounds.length) return { minX: -400, minY: -300, maxX: 800, maxY: 600, width: 1200, height: 900 };
   const minX = Math.min(...itemBounds.map((item) => item.minX)) - padding;
   const minY = Math.min(...itemBounds.map((item) => item.minY)) - padding;
@@ -34,29 +34,33 @@ const bounds = computed(() => {
   return { minX, minY, maxX, maxY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 });
 
-const canvasItemBounds = computed(() => [
-  ...props.notes.map((note) => ({
+const miniNotes = computed(() =>
+  props.notes.map((note) => ({
     id: note.id,
-    type: "note" as const,
     color: note.color,
     minX: note.x,
     minY: note.y,
     maxX: note.x + note.width,
     maxY: note.y + note.height,
   })),
-  ...props.drawings.flatMap((drawing) => {
+);
+
+const miniDrawings = computed(() =>
+  props.drawings.flatMap((drawing) => {
     const bounds = drawingBounds(drawing);
-    return bounds ? [{ id: drawing.id, type: "drawing" as const, color: drawing.color, ...bounds }] : [];
+    return bounds ? [{ drawing, ...bounds }] : [];
   }),
-  ...props.images.map((image) => ({
+);
+
+const miniImages = computed(() =>
+  props.images.map((image) => ({
     id: image.id,
-    type: "image" as const,
     minX: image.x,
     minY: image.y,
     maxX: image.x + image.width,
     maxY: image.y + image.height,
   })),
-]);
+);
 
 const mapScale = computed(() => Math.min(mapWidth / bounds.value.width, mapHeight / bounds.value.height));
 const offset = computed(() => ({
@@ -64,14 +68,78 @@ const offset = computed(() => ({
   y: (mapHeight - bounds.value.height * mapScale.value) / 2,
 }));
 
-function itemStyle(item: (typeof canvasItemBounds.value)[number]) {
+function boxStyle(item: { minX: number; minY: number; maxX: number; maxY: number }) {
   return {
     left: `${offset.value.x + (item.minX - bounds.value.minX) * mapScale.value}px`,
     top: `${offset.value.y + (item.minY - bounds.value.minY) * mapScale.value}px`,
     width: `${Math.max(4, (item.maxX - item.minX) * mapScale.value)}px`,
     height: `${Math.max(4, (item.maxY - item.minY) * mapScale.value)}px`,
-    backgroundColor: item.type === "note" ? noteColors[item.color] : item.type === "drawing" ? item.color : "#94a3b8",
   };
+}
+
+function noteStyle(note: (typeof miniNotes.value)[number]) {
+  return {
+    ...boxStyle(note),
+    backgroundColor: noteColors[note.color],
+  };
+}
+
+function imageStyle(image: (typeof miniImages.value)[number]) {
+  return {
+    ...boxStyle(image),
+    backgroundColor: "#94a3b8",
+  };
+}
+
+function drawingSvgStyle() {
+  return {
+    left: `${offset.value.x}px`,
+    top: `${offset.value.y}px`,
+    width: `${bounds.value.width * mapScale.value}px`,
+    height: `${bounds.value.height * mapScale.value}px`,
+  };
+}
+
+function miniPoint(point: { x: number; y: number }) {
+  return {
+    x: (point.x - bounds.value.minX) * mapScale.value,
+    y: (point.y - bounds.value.minY) * mapScale.value,
+  };
+}
+
+function miniDrawingPath(drawing: DrawingItem) {
+  if (drawing.type === "pen") {
+    const points = drawing.points ?? [];
+    if (!points.length) return "";
+    return points
+      .map((point, index) => {
+        const mini = miniPoint(point);
+        return `${index === 0 ? "M" : "L"} ${mini.x} ${mini.y}`;
+      })
+      .join(" ");
+  }
+  if (drawing.type === "arrow" || drawing.type === "line") {
+    if (!drawing.start || !drawing.end) return "";
+    const start = miniPoint(drawing.start);
+    const end = miniPoint(drawing.end);
+    return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
+  }
+  const x = ((drawing.x ?? 0) - bounds.value.minX) * mapScale.value;
+  const y = ((drawing.y ?? 0) - bounds.value.minY) * mapScale.value;
+  const width = (drawing.width ?? 0) * mapScale.value;
+  const height = (drawing.height ?? 0) * mapScale.value;
+  if (drawing.type === "ellipse") {
+    const rx = Math.abs(width) / 2;
+    const ry = Math.abs(height) / 2;
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    return `M ${cx - rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx + rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx - rx} ${cy}`;
+  }
+  return `M ${x} ${y} L ${x + width} ${y} L ${x + width} ${y + height} L ${x} ${y + height} Z`;
+}
+
+function miniStrokeWidth(drawing: DrawingItem) {
+  return Math.max(1, Math.min(2.4, drawing.strokeWidth * mapScale.value * 0.45));
 }
 
 function drawingBounds(drawing: DrawingItem) {
@@ -120,7 +188,20 @@ function clickMap(event: MouseEvent) {
 <template>
   <div class="minimap">
     <div class="map" @click="clickMap">
-      <div v-for="item in canvasItemBounds" :key="`${item.type}-${item.id}`" class="mini-item" :class="item.type" :style="itemStyle(item)"></div>
+      <div v-for="note in miniNotes" :key="`note-${note.id}`" class="mini-item note" :style="noteStyle(note)"></div>
+      <div v-for="image in miniImages" :key="`image-${image.id}`" class="mini-item image" :style="imageStyle(image)"></div>
+      <svg class="mini-drawings" :style="drawingSvgStyle()" :viewBox="`0 0 ${bounds.width * mapScale} ${bounds.height * mapScale}`">
+        <path
+          v-for="item in miniDrawings"
+          :key="`drawing-${item.drawing.id}`"
+          :d="miniDrawingPath(item.drawing)"
+          :stroke="item.drawing.color"
+          :stroke-width="miniStrokeWidth(item.drawing)"
+          fill="none"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
       <div class="viewport" :style="viewportStyle"></div>
     </div>
     <div class="mini-controls">
@@ -161,15 +242,16 @@ function clickMap(event: MouseEvent) {
   opacity: 0.72;
 }
 
-.mini-item.drawing {
-  min-width: 5px;
-  min-height: 3px;
-  border-radius: 999px;
-}
-
 .mini-item.image {
   opacity: 0.62;
   outline: 1px solid rgba(51, 65, 85, 0.35);
+}
+
+.mini-drawings {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.62;
+  overflow: visible;
 }
 
 .viewport {
