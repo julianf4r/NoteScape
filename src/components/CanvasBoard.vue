@@ -51,6 +51,8 @@ const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before
 const imageViewer = ref<{ image: CanvasImageType; url: string; scale: number; offsetX: number; offsetY: number } | null>(null);
 const imageViewerDrag = ref<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
 let highlightTimer: number | undefined;
+let viewportSaveTimer: number | undefined;
+let pendingViewportSave: { canvasId: string; viewport: ViewportState } | undefined;
 let unlistenImageDrop: UnlistenFn | undefined;
 const minBoxSelectDistance = 4;
 const imageExtensions = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"]);
@@ -1267,6 +1269,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  flushViewportSave();
   window.removeEventListener("mousemove", updateDrawing);
   window.removeEventListener("mousemove", dragDrawing);
   window.removeEventListener("mousemove", editDrawing);
@@ -1278,6 +1281,7 @@ onUnmounted(() => {
   window.removeEventListener("resize", updateBoardSize);
   unlistenImageDrop?.();
   window.clearTimeout(highlightTimer);
+  window.clearTimeout(viewportSaveTimer);
 });
 
 function updateBoardSize() {
@@ -1289,12 +1293,27 @@ function updateBoardSize() {
 
 function saveViewport() {
   if (!canvasStore.currentCanvasId) return;
-  canvasStore.updateViewport(canvasStore.currentCanvasId, { ...viewport });
+  pendingViewportSave = {
+    canvasId: canvasStore.currentCanvasId,
+    viewport: { ...viewport },
+  };
+  window.clearTimeout(viewportSaveTimer);
+  viewportSaveTimer = window.setTimeout(flushViewportSave, 350);
+}
+
+function flushViewportSave() {
+  if (!pendingViewportSave) return;
+  window.clearTimeout(viewportSaveTimer);
+  viewportSaveTimer = undefined;
+  const pending = pendingViewportSave;
+  pendingViewportSave = undefined;
+  canvasStore.updateViewport(pending.canvasId, pending.viewport);
 }
 
 watch(
   () => canvasStore.currentCanvasId,
   () => {
+    flushViewportSave();
     clearObjectSelection();
     contextMenu.value = null;
     clearObjectHistory();

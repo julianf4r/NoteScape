@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { DrawingItem, DrawingPoint } from "../types";
 import { useDrawingStore } from "../stores/drawingStore";
 
@@ -16,6 +17,61 @@ const emit = defineEmits<{
 }>();
 
 const drawingStore = useDrawingStore();
+
+const layerBounds = computed(() => {
+  const bounds = props.drawings.map(drawingBounds).filter((item): item is DrawingBounds => Boolean(item));
+  const maxStroke = Math.max(1, ...props.drawings.map((drawing) => drawing.strokeWidth));
+  const padding = maxStroke + 28;
+  if (!bounds.length) return { minX: -padding, minY: -padding, width: padding * 2, height: padding * 2 };
+  const minX = Math.min(...bounds.map((item) => item.minX)) - padding;
+  const minY = Math.min(...bounds.map((item) => item.minY)) - padding;
+  const maxX = Math.max(...bounds.map((item) => item.maxX)) + padding;
+  const maxY = Math.max(...bounds.map((item) => item.maxY)) + padding;
+  return {
+    minX,
+    minY,
+    width: Math.max(1, maxX - minX),
+    height: Math.max(1, maxY - minY),
+  };
+});
+
+const layerStyle = computed(() => ({
+  left: `${layerBounds.value.minX}px`,
+  top: `${layerBounds.value.minY}px`,
+  width: `${layerBounds.value.width}px`,
+  height: `${layerBounds.value.height}px`,
+}));
+
+type DrawingBounds = { minX: number; minY: number; maxX: number; maxY: number };
+
+function drawingBounds(drawing: DrawingItem): DrawingBounds | null {
+  if (drawing.type === "pen") {
+    const points = drawing.points ?? [];
+    if (!points.length) return null;
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+  }
+  if (drawing.type === "arrow" || drawing.type === "line") {
+    if (!drawing.start || !drawing.end) return null;
+    return {
+      minX: Math.min(drawing.start.x, drawing.end.x),
+      minY: Math.min(drawing.start.y, drawing.end.y),
+      maxX: Math.max(drawing.start.x, drawing.end.x),
+      maxY: Math.max(drawing.start.y, drawing.end.y),
+    };
+  }
+  const x = drawing.x ?? 0;
+  const y = drawing.y ?? 0;
+  const width = drawing.width ?? 0;
+  const height = drawing.height ?? 0;
+  return {
+    minX: Math.min(x, x + width),
+    minY: Math.min(y, y + height),
+    maxX: Math.max(x, x + width),
+    maxY: Math.max(y, y + height),
+  };
+}
 
 function selectDrawing(event: MouseEvent, id: string) {
   if (event.button === 1 || props.panMode) return;
@@ -249,9 +305,10 @@ function resizeHandlePoint(drawing: DrawingItem) {
   <svg
     data-drawing-layer="true"
     class="drawing-layer"
-    width="2800"
-    height="2200"
-    viewBox="0 0 2800 2200"
+    :width="layerBounds.width"
+    :height="layerBounds.height"
+    :viewBox="`${layerBounds.minX} ${layerBounds.minY} ${layerBounds.width} ${layerBounds.height}`"
+    :style="layerStyle"
   >
     <defs>
       <filter id="drawing-selection-glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -409,9 +466,9 @@ function resizeHandlePoint(drawing: DrawingItem) {
 <style scoped>
 .drawing-layer {
   position: absolute;
-  inset: 0;
   pointer-events: none;
   overflow: visible;
+  contain: layout style;
 }
 
 .drawing-layer :deep(.drawing-stroke) {

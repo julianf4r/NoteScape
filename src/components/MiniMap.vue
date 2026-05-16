@@ -67,6 +67,16 @@ const offset = computed(() => ({
   x: (mapWidth - bounds.value.width * mapScale.value) / 2,
   y: (mapHeight - bounds.value.height * mapScale.value) / 2,
 }));
+const miniDrawingPaths = computed(() =>
+  miniDrawings.value
+    .map((item) => ({
+      id: item.drawing.id,
+      path: miniDrawingPath(item.drawing),
+      color: item.drawing.color,
+      strokeWidth: miniStrokeWidth(item.drawing),
+    }))
+    .filter((item) => item.path),
+);
 
 function boxStyle(item: { minX: number; minY: number; maxX: number; maxY: number }) {
   return {
@@ -199,11 +209,11 @@ function clickMap(event: MouseEvent) {
       <div v-for="image in miniImages" :key="`image-${image.id}`" class="mini-item image" :style="imageStyle(image)"></div>
       <svg class="mini-drawings" :style="drawingSvgStyle()" :viewBox="`0 0 ${bounds.width * mapScale} ${bounds.height * mapScale}`">
         <path
-          v-for="item in miniDrawings"
-          :key="`drawing-${item.drawing.id}`"
-          :d="miniDrawingPath(item.drawing)"
-          :stroke="item.drawing.color"
-          :stroke-width="miniStrokeWidth(item.drawing)"
+          v-for="item in miniDrawingPaths"
+          :key="`drawing-${item.id}`"
+          :d="item.path"
+          :stroke="item.color"
+          :stroke-width="item.strokeWidth"
           fill="none"
           stroke-linecap="round"
           stroke-linejoin="round"
