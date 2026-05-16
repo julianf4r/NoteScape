@@ -21,7 +21,7 @@ import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteCol
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 import { contentJsonToMarkdown } from "../utils/markdown";
-import { imageFileUrl, importImageBytes, importImageFile, readClipboardImage } from "../utils/storage";
+import { imageFileUrl, importImageBytes, importImageFile, readClipboardImage, resolveImagePath } from "../utils/storage";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -48,6 +48,8 @@ const activeDrawingId = ref("");
 const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
+const imageViewer = ref<{ image: CanvasImageType; url: string; scale: number; offsetX: number; offsetY: number } | null>(null);
+const imageViewerDrag = ref<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
 let highlightTimer: number | undefined;
 let unlistenImageDrop: UnlistenFn | undefined;
 const minBoxSelectDistance = 4;
@@ -677,6 +679,72 @@ function updateImage(image: CanvasImageType, patch: Partial<CanvasImageType> & {
   });
 }
 
+async function openImageViewer(image: CanvasImageType) {
+  const path = await resolveImagePath(image.fileName, settingsStore.settings.imageLibraryPath);
+  if (!path) {
+    feedback.notify("找不到原图片", "error");
+    return;
+  }
+  imageViewer.value = {
+    image,
+    url: imageFileUrl(path),
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
+  };
+  contextMenu.value = null;
+}
+
+function closeImageViewer() {
+  imageViewer.value = null;
+  imageViewerDrag.value = null;
+}
+
+function zoomImageViewer(event: WheelEvent) {
+  if (!imageViewer.value) return;
+  event.preventDefault();
+  const viewer = imageViewer.value;
+  const currentScale = viewer.scale;
+  const nextScale = clamp(currentScale * (event.deltaY > 0 ? 0.9 : 1.1), 0.2, 8);
+  if (nextScale === currentScale) return;
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+  const pointerX = event.clientX - rect.left - rect.width / 2;
+  const pointerY = event.clientY - rect.top - rect.height / 2;
+  const scaleRatio = nextScale / currentScale;
+  viewer.offsetX = pointerX - (pointerX - viewer.offsetX) * scaleRatio;
+  viewer.offsetY = pointerY - (pointerY - viewer.offsetY) * scaleRatio;
+  imageViewer.value.scale = nextScale;
+}
+
+function startImageViewerDrag(event: MouseEvent) {
+  if (!imageViewer.value || event.button !== 0) return;
+  event.preventDefault();
+  imageViewerDrag.value = {
+    startX: event.clientX,
+    startY: event.clientY,
+    offsetX: imageViewer.value.offsetX,
+    offsetY: imageViewer.value.offsetY,
+  };
+  window.addEventListener("mousemove", dragImageViewer);
+  window.addEventListener("mouseup", endImageViewerDrag, { once: true });
+}
+
+function startImageViewerBackdropDrag(event: MouseEvent) {
+  if (event.target !== event.currentTarget) return;
+  startImageViewerDrag(event);
+}
+
+function dragImageViewer(event: MouseEvent) {
+  if (!imageViewer.value || !imageViewerDrag.value) return;
+  imageViewer.value.offsetX = imageViewerDrag.value.offsetX + event.clientX - imageViewerDrag.value.startX;
+  imageViewer.value.offsetY = imageViewerDrag.value.offsetY + event.clientY - imageViewerDrag.value.startY;
+}
+
+function endImageViewerDrag() {
+  window.removeEventListener("mousemove", dragImageViewer);
+  imageViewerDrag.value = null;
+}
+
 async function addImageAt(clientX?: number, clientY?: number) {
   if (!canvasStore.currentCanvasId || !board.value) return;
   const selected = await open({
@@ -818,6 +886,13 @@ function cloneDrawing(drawing: DrawingItem): DrawingItem {
 function cloneImage(image: CanvasImageType): CanvasImageType {
   return { ...image };
 }
+
+const imageViewerImageStyle = computed(() => {
+  if (!imageViewer.value) return {};
+  return {
+    transform: `translate(${imageViewer.value.offsetX}px, ${imageViewer.value.offsetY}px) scale(${imageViewer.value.scale})`,
+  };
+});
 
 function undo() {
   const batch = canvasHistory.value.pop();
@@ -1200,6 +1275,10 @@ function onKeydown(event: KeyboardEvent) {
     return;
   }
   if (event.key === "Escape") {
+    if (imageViewer.value) {
+      closeImageViewer();
+      return;
+    }
     clearObjectSelection();
     return;
   }
@@ -1240,6 +1319,7 @@ onUnmounted(() => {
   window.removeEventListener("mousemove", dragDrawing);
   window.removeEventListener("mousemove", editDrawing);
   window.removeEventListener("mousemove", dragMixed);
+  window.removeEventListener("mousemove", dragImageViewer);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
   window.removeEventListener("paste", onPaste);
@@ -1335,6 +1415,7 @@ watch(
         @update="(patch, track) => updateImage(image, patch, track)"
         @live="(patch) => imageStore.patchImageLive(image.id, patch)"
         @delete="deleteObjectForContext('image', image.id)"
+        @view="openImageViewer(image)"
         @context="(event) => openImageMenu(event, image.id)"
       />
       <StickyNote
@@ -1364,6 +1445,25 @@ watch(
     </div>
 
     <div v-if="boxSelect" class="selection-box" :style="boxSelectStyle"></div>
+
+    <div
+      v-if="imageViewer"
+      class="image-viewer"
+      :class="{ dragging: imageViewerDrag }"
+      @wheel.prevent.stop="zoomImageViewer"
+      @mousedown.stop="startImageViewerBackdropDrag"
+      @dblclick.self.stop="closeImageViewer"
+    >
+      <button class="image-viewer-close" title="关闭" @click.stop="closeImageViewer"><X :size="22" /></button>
+      <img
+        class="image-viewer-image"
+        :src="imageViewer.url"
+        :alt="imageViewer.image.originalName || '图片'"
+        :style="imageViewerImageStyle"
+        draggable="false"
+        @mousedown.stop="startImageViewerDrag"
+      />
+    </div>
 
     <CanvasToolbar
       :scale="viewport.scale"
@@ -1451,6 +1551,7 @@ watch(
         </div>
       </template>
       <template v-else-if="contextMenu.imageId">
+        <button @click="openImageViewer(imageStore.images.find((image) => image.id === contextMenu!.imageId)!); contextMenu = null">查看</button>
         <button @click="copySelectedObjects(); contextMenu = null">复制</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
         <button @click="bringObjectForContext('image', contextMenu!.imageId!); contextMenu = null">
@@ -1631,6 +1732,54 @@ watch(
   pointer-events: none;
   border: 1px solid rgba(59, 130, 246, 0.85);
   background: rgba(59, 130, 246, 0.12);
+}
+
+.image-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.86);
+  cursor: var(--cursor-grab);
+}
+
+.image-viewer.dragging {
+  cursor: var(--cursor-grabbing);
+}
+
+.image-viewer-image {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  transform-origin: center center;
+  user-select: none;
+  cursor: var(--cursor-grab);
+}
+
+.image-viewer.dragging .image-viewer-image {
+  cursor: var(--cursor-grabbing);
+}
+
+.image-viewer-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #e5e7eb;
+  background: rgba(15, 23, 42, 0.58);
+  border: 1px solid rgba(226, 232, 240, 0.24);
+  border-radius: 8px;
+}
+
+.image-viewer-close:hover {
+  background: rgba(30, 41, 59, 0.82);
 }
 
 .context-section {

@@ -17,6 +17,7 @@ const emit = defineEmits<{
   update: [patch: Partial<CanvasImage> & { __before?: CanvasImage }, track?: boolean];
   live: [patch: Partial<CanvasImage>];
   delete: [];
+  view: [];
   context: [event: MouseEvent];
 }>();
 
@@ -112,6 +113,7 @@ function endResize() {
     :class="{ selected, missing, transparent: image.showBackground === false }"
     :style="style"
     @mousedown.left="startDrag"
+    @dblclick.stop="emit('view')"
     @contextmenu.prevent.stop="emit('context', $event)"
   >
     <img v-if="!missing" :src="imageUrl" :alt="image.originalName || '图片'" draggable="false" @error="missing = true" />
