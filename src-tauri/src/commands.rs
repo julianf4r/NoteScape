@@ -348,34 +348,40 @@ fn image_asset_by_hash(
 }
 
 fn retain_image_asset(conn: &Connection, file_name: &str) -> Result<(), String> {
+    let actual_references = count_image_references(conn, file_name)?;
     conn.execute(
-        "UPDATE image_assets SET ref_count = ref_count + 1 WHERE file_name = ?1",
-        params![file_name],
+        "UPDATE image_assets SET ref_count = ?1 WHERE file_name = ?2",
+        params![actual_references, file_name],
     )
     .map_err(|error| error.to_string())?;
     Ok(())
 }
 
 fn release_image_asset(conn: &Connection, library: &Path, file_name: &str) -> Result<(), String> {
-    let asset = conn
-        .query_row(
-            "SELECT content_hash, ref_count FROM image_assets WHERE file_name = ?1",
-            params![file_name],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
-        )
-        .optional()
-        .map_err(|error| error.to_string())?;
-    let Some((content_hash, ref_count)) = asset else {
-        return Ok(());
-    };
-    if ref_count > 1 {
+    let actual_references = count_image_references(conn, file_name)?;
+    if actual_references > 0 {
         conn.execute(
-            "UPDATE image_assets SET ref_count = ref_count - 1 WHERE content_hash = ?1",
-            params![content_hash],
+            "UPDATE image_assets SET ref_count = ?1 WHERE file_name = ?2",
+            params![actual_references, file_name],
         )
         .map_err(|error| error.to_string())?;
         return Ok(());
     }
+    let asset = conn
+        .query_row(
+            "SELECT content_hash FROM image_assets WHERE file_name = ?1",
+            params![file_name],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let Some(content_hash) = asset else {
+        let target = library.join(file_name);
+        if target.exists() {
+            fs::remove_file(&target).map_err(|error| error.to_string())?;
+        }
+        return Ok(());
+    };
     let target = library.join(file_name);
     if target.exists() {
         fs::remove_file(&target).map_err(|error| error.to_string())?;
@@ -386,6 +392,24 @@ fn release_image_asset(conn: &Connection, library: &Path, file_name: &str) -> Re
     )
     .map_err(|error| error.to_string())?;
     Ok(())
+}
+
+fn count_image_references(conn: &Connection, file_name: &str) -> Result<i64, String> {
+    let mut statement = conn
+        .prepare("SELECT data FROM images")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([], |row| row.get::<_, String>(0))
+        .map_err(|error| error.to_string())?;
+    let mut count = 0;
+    for row in rows {
+        let data = row.map_err(|error| error.to_string())?;
+        let image: CanvasImage = serde_json::from_str(&data).map_err(|error| error.to_string())?;
+        if image.file_name == file_name {
+            count += 1;
+        }
+    }
+    Ok(count)
 }
 
 fn file_hash(path: &Path) -> Result<String, String> {

@@ -112,7 +112,7 @@ function endResize() {
     :class="{ selected, missing }"
     :style="style"
     @mousedown.left="startDrag"
-    @contextmenu.prevent="emit('context', $event)"
+    @contextmenu.prevent.stop="emit('context', $event)"
   >
     <img v-if="!missing" :src="imageUrl" :alt="image.originalName || '图片'" draggable="false" @error="missing = true" />
     <div v-else class="missing-state">

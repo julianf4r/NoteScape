@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import type { UnlistenFn } from "@tauri-apps/api/event";
 import { X } from "lucide-vue-next";
 import CanvasImage from "./CanvasImage.vue";
 import CanvasToolbar from "./CanvasToolbar.vue";
@@ -47,7 +49,9 @@ const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
+let unlistenImageDrop: UnlistenFn | undefined;
 const minBoxSelectDistance = 4;
+const imageExtensions = new Set(["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"]);
 const visibleNotes = computed(() =>
   noteStore.notesForCanvas(canvasStore.currentCanvasId, tagStore.activeTagId, canvasStore.searchQuery),
 );
@@ -559,11 +563,16 @@ async function addImageAt(clientX?: number, clientY?: number) {
   const selected = await open({
     multiple: false,
     directory: false,
-    filters: [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "gif", "bmp", "svg"] }],
+    filters: [{ name: "图片", extensions: [...imageExtensions] }],
   });
   if (typeof selected !== "string") return;
+  await addImageFileAt(selected, clientX, clientY);
+}
+
+async function addImageFileAt(sourcePath: string, clientX?: number, clientY?: number, index = 0) {
+  if (!canvasStore.currentCanvasId || !board.value || !isImagePath(sourcePath)) return;
   try {
-    const imported = await importImageFile(selected, settingsStore.settings.imageLibraryPath);
+    const imported = await importImageFile(sourcePath, settingsStore.settings.imageLibraryPath);
     const size = await measureImageSize(imageFileUrl(imported.path));
     const rect = board.value.getBoundingClientRect();
     const point = clientX !== undefined && clientY !== undefined
@@ -573,8 +582,8 @@ async function addImageAt(clientX?: number, clientY?: number) {
       fileName: imported.fileName,
       originalName: imported.originalName,
       contentHash: imported.contentHash,
-      x: point.x - size.width / 2,
-      y: point.y - size.height / 2,
+      x: point.x - size.width / 2 + index * 18,
+      y: point.y - size.height / 2 + index * 18,
       width: size.width,
       height: size.height,
       rotationEnabled: settingsStore.settings.randomRotation,
@@ -584,6 +593,47 @@ async function addImageAt(clientX?: number, clientY?: number) {
   } catch (error) {
     feedback.notify(`添加图片失败：${error instanceof Error ? error.message : String(error)}`, "error");
   }
+}
+
+function isImagePath(path: string) {
+  const extension = path.split(/[\\/]/).pop()?.split(".").pop()?.toLowerCase();
+  return Boolean(extension && imageExtensions.has(extension));
+}
+
+function clientPointFromDropPosition(position: { x: number; y: number }) {
+  const ratio = window.devicePixelRatio || 1;
+  const x = position.x > window.innerWidth + 2 ? position.x / ratio : position.x;
+  const y = position.y > window.innerHeight + 2 ? position.y / ratio : position.y;
+  return { x, y };
+}
+
+async function addDroppedImages(paths: string[], clientX: number, clientY: number) {
+  const imagePaths = paths.filter(isImagePath);
+  if (!imagePaths.length) return;
+  for (const [index, path] of imagePaths.entries()) {
+    await addImageFileAt(path, clientX, clientY, index);
+  }
+}
+
+async function onNativeDrop(event: DragEvent) {
+  event.preventDefault();
+  event.stopPropagation();
+  const files = Array.from(event.dataTransfer?.files ?? []);
+  const paths = files
+    .map((file) => (file as File & { path?: string }).path)
+    .filter((path): path is string => Boolean(path));
+  if (!paths.length) return;
+  await addDroppedImages(paths, event.clientX, event.clientY);
+}
+
+async function startImageDropListener() {
+  unlistenImageDrop = await getCurrentWebview().onDragDropEvent(async (event) => {
+    if (event.payload.type !== "drop" || !board.value) return;
+    const point = clientPointFromDropPosition(event.payload.position);
+    const rect = board.value.getBoundingClientRect();
+    if (point.x < rect.left || point.x > rect.right || point.y < rect.top || point.y > rect.bottom) return;
+    await addDroppedImages(event.payload.paths, point.x, point.y);
+  });
 }
 
 function measureImageSize(src: string): Promise<{ width: number; height: number }> {
@@ -944,6 +994,7 @@ function onKeyup(event: KeyboardEvent) {
 
 onMounted(() => {
   updateBoardSize();
+  void startImageDropListener().catch((error) => feedback.notify(`监听图片拖拽失败：${error instanceof Error ? error.message : String(error)}`, "error"));
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onKeyup);
   window.addEventListener("locate-note", onLocateNote);
@@ -959,6 +1010,7 @@ onUnmounted(() => {
   window.removeEventListener("keyup", onKeyup);
   window.removeEventListener("locate-note", onLocateNote);
   window.removeEventListener("resize", updateBoardSize);
+  unlistenImageDrop?.();
   window.clearTimeout(highlightTimer);
 });
 
@@ -995,6 +1047,8 @@ watch(
     @dblclick="onBoardDoubleClick"
     @wheel="onWheel"
     @contextmenu.prevent="openCanvasMenu"
+    @dragover.prevent
+    @drop.prevent="onNativeDrop"
   >
     <div v-if="appStore.loaded && !appStore.databaseReady" class="empty-board database-error">
       数据库未加载<br />
