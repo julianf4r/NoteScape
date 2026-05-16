@@ -26,6 +26,7 @@ const tagDraft = ref("");
 const tagColorDraft = ref("#3b82f6");
 const collapsed = ref(false);
 const openCanvasMenuId = ref("");
+const openTagMenuId = ref("");
 const appVersion = packageInfo.version;
 const hasSearchQuery = computed(() => Boolean(canvasStore.searchQuery.trim()));
 
@@ -109,6 +110,7 @@ function cancelRename() {
 function selectCanvas(id: string) {
   showTrash.value = false;
   openCanvasMenuId.value = "";
+  openTagMenuId.value = "";
   canvasStore.selectCanvas(id);
 }
 
@@ -129,6 +131,25 @@ function renameCanvasFromMenu(id: string, name: string) {
 async function deleteCanvasFromMenu(id: string, name: string) {
   openCanvasMenuId.value = "";
   await deleteCanvas(id, name);
+}
+
+function toggleTagMenu(id: string) {
+  openTagMenuId.value = openTagMenuId.value === id ? "" : id;
+}
+
+function moveTag(id: string, delta: -1 | 1) {
+  tagStore.moveTag(id, delta);
+  openTagMenuId.value = "";
+}
+
+function renameTagFromMenu(id: string, name: string, color: string) {
+  openTagMenuId.value = "";
+  startRenameTag(id, name, color);
+}
+
+async function deleteTagFromMenu(id: string, name: string) {
+  openTagMenuId.value = "";
+  await deleteTag(id, name);
 }
 
 async function deleteCanvas(id: string, name: string) {
@@ -215,6 +236,8 @@ function selectSearchNote(noteId: string, canvasId: string) {
 }
 
 function selectSearchTag(tagId: string) {
+  openCanvasMenuId.value = "";
+  openTagMenuId.value = "";
   tagStore.activeTagId = tagId;
   canvasStore.searchQuery = "";
 }
@@ -226,6 +249,7 @@ function selectSearchCanvas(id: string) {
 
 function closeCanvasMenu() {
   openCanvasMenuId.value = "";
+  openTagMenuId.value = "";
 }
 
 onMounted(() => {
@@ -315,7 +339,7 @@ onUnmounted(() => {
               <button title="更多" @mousedown.stop @click.stop="toggleCanvasMenu(canvas.id)"><Ellipsis :size="16" /></button>
             </span>
           </div>
-          <div v-if="openCanvasMenuId === canvas.id" class="canvas-action-menu" @mousedown.stop @click.stop>
+          <div v-if="openCanvasMenuId === canvas.id" class="row-action-menu" @mousedown.stop @click.stop>
             <button :disabled="!canMoveCanvasUp(canvas.id)" @click="moveCanvas(canvas.id, -1)"><ArrowUp :size="14" />上移</button>
             <button :disabled="!canMoveCanvasDown(canvas.id)" @click="moveCanvas(canvas.id, 1)"><ArrowDown :size="14" />下移</button>
             <button @click="renameCanvasFromMenu(canvas.id, canvas.name)"><Pencil :size="14" />重命名</button>
@@ -345,43 +369,49 @@ onUnmounted(() => {
           <span>标签</span>
           <button class="small-add" :disabled="!appStore.databaseReady" @click="createTag"><Plus :size="18" /></button>
         </div>
-        <button
-          v-for="tag in tagStore.orderedTags"
-          :key="tag.id"
-          class="tag-row"
-          :class="{ active: tag.id === tagStore.activeTagId }"
-          @click="tagStore.toggleTag(tag.id)"
-          @dblclick="startRenameTag(tag.id, tag.name, tag.color)"
-          @contextmenu.prevent="startRenameTag(tag.id, tag.name, tag.color)"
-        >
-          <label class="tag-color-control" title="修改颜色" @click.stop @dblclick.stop @mousedown.stop>
-            <i :style="{ backgroundColor: tag.color }"></i>
+        <div v-for="tag in tagStore.orderedTags" :key="tag.id" class="tag-row-wrap">
+          <div
+            class="tag-row"
+            :class="{ active: tag.id === tagStore.activeTagId }"
+            role="button"
+            tabindex="0"
+            @click="tagStore.toggleTag(tag.id)"
+            @dblclick="startRenameTag(tag.id, tag.name, tag.color)"
+            @contextmenu.prevent="renameTagFromMenu(tag.id, tag.name, tag.color)"
+            @keydown.enter.prevent="tagStore.toggleTag(tag.id)"
+          >
+            <label class="tag-color-control" title="修改颜色" @click.stop @dblclick.stop @mousedown.stop>
+              <i :style="{ backgroundColor: tag.color }"></i>
+              <input
+                type="color"
+                :value="tag.color"
+                @input="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+                @change="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+              />
+            </label>
             <input
-              type="color"
-              :value="tag.color"
-              @input="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
-              @change="changeTagColor(tag.id, ($event.target as HTMLInputElement).value)"
+              v-if="renamingTagId === tag.id"
+              v-model="tagDraft"
+              :data-tag-rename-id="tag.id"
+              class="tag-name-input"
+              @click.stop
+              @keydown.enter.stop.prevent="commitTag(tag.id)"
+              @keydown.esc.stop.prevent="cancelTagRename"
+              @blur="commitTag(tag.id)"
             />
-          </label>
-          <input
-            v-if="renamingTagId === tag.id"
-            v-model="tagDraft"
-            :data-tag-rename-id="tag.id"
-            class="tag-name-input"
-            @click.stop
-            @keydown.enter.stop.prevent="commitTag(tag.id)"
-            @keydown.esc.stop.prevent="cancelTagRename"
-            @blur="commitTag(tag.id)"
-          />
-          <span v-else>{{ tag.name }}</span>
-          <b>{{ tag.count }}</b>
-          <span class="tag-actions">
-            <button title="上移" :disabled="!canMoveTagUp(tag.id)" @click.stop="tagStore.moveTag(tag.id, -1)"><ArrowUp :size="14" /></button>
-            <button title="下移" :disabled="!canMoveTagDown(tag.id)" @click.stop="tagStore.moveTag(tag.id, 1)"><ArrowDown :size="14" /></button>
-            <button title="重命名" @click.stop="startRenameTag(tag.id, tag.name, tag.color)"><Pencil :size="14" /></button>
-            <button title="删除" @click.stop="deleteTag(tag.id, tag.name)"><Trash2 :size="14" /></button>
-          </span>
-        </button>
+            <span v-else>{{ tag.name }}</span>
+            <span class="tag-meta">
+              <b>{{ tag.count }}</b>
+              <button title="更多" @mousedown.stop @click.stop="toggleTagMenu(tag.id)"><Ellipsis :size="16" /></button>
+            </span>
+          </div>
+          <div v-if="openTagMenuId === tag.id" class="row-action-menu" @mousedown.stop @click.stop>
+            <button :disabled="!canMoveTagUp(tag.id)" @click="moveTag(tag.id, -1)"><ArrowUp :size="14" />上移</button>
+            <button :disabled="!canMoveTagDown(tag.id)" @click="moveTag(tag.id, 1)"><ArrowDown :size="14" />下移</button>
+            <button @click="renameTagFromMenu(tag.id, tag.name, tag.color)"><Pencil :size="14" />重命名</button>
+            <button class="danger" @click="deleteTagFromMenu(tag.id, tag.name)"><Trash2 :size="14" />删除</button>
+          </div>
+        </div>
         </section>
       </div>
     </template>
@@ -605,7 +635,8 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.canvas-row-wrap {
+.canvas-row-wrap,
+.tag-row-wrap {
   position: relative;
 }
 
@@ -648,6 +679,28 @@ onUnmounted(() => {
   color: var(--text-muted);
 }
 
+.tag-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-meta button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.tag-meta button:hover {
+  color: #1f2937;
+  background: #fff;
+}
+
 .canvas-row input {
   min-width: 0;
   border: 0;
@@ -662,18 +715,13 @@ onUnmounted(() => {
   gap: 2px;
 }
 
-.tag-row:hover .tag-actions {
-  display: inline-flex;
-}
-
 .canvas-row:hover .time,
 .tag-row:hover b {
-  display: none;
+  display: inline;
 }
 
 .row-actions button,
-.trash-row button,
-.tag-actions button {
+.trash-row button {
   width: 26px;
   height: 26px;
   display: inline-flex;
@@ -685,8 +733,7 @@ onUnmounted(() => {
 }
 
 .row-actions button:hover,
-.trash-row button:hover,
-.tag-actions button:hover {
+.trash-row button:hover {
   color: #1f2937;
   background: #fff;
 }
@@ -696,7 +743,7 @@ onUnmounted(() => {
   opacity: 0.34;
 }
 
-.canvas-action-menu {
+.row-action-menu {
   position: absolute;
   top: calc(100% - 2px);
   right: 8px;
@@ -709,7 +756,7 @@ onUnmounted(() => {
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
 }
 
-.canvas-action-menu button {
+.row-action-menu button {
   width: 100%;
   min-height: 30px;
   display: flex;
@@ -723,23 +770,18 @@ onUnmounted(() => {
   text-align: left;
 }
 
-.canvas-action-menu button:hover {
+.row-action-menu button:hover {
   background: #f3f6fb;
 }
 
-.canvas-action-menu button:disabled {
+.row-action-menu button:disabled {
   cursor: var(--cursor-default);
   color: #aeb6c2;
   background: transparent;
 }
 
-.canvas-action-menu button.danger {
+.row-action-menu button.danger {
   color: #b91c1c;
-}
-
-.tag-actions button:disabled {
-  cursor: var(--cursor-default);
-  opacity: 0.34;
 }
 
 .trash {
@@ -808,12 +850,6 @@ onUnmounted(() => {
 
 .tag-row {
   grid-template-columns: 22px 1fr auto;
-}
-
-.tag-actions {
-  display: none;
-  align-items: center;
-  gap: 2px;
 }
 
 .tag-color-control input {
