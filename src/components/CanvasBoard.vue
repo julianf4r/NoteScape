@@ -821,14 +821,6 @@ async function onNativeDrop(event: DragEvent) {
   await addDroppedImages(paths, event.clientX, event.clientY);
 }
 
-async function onPaste(event: ClipboardEvent) {
-  if (isTextInputTarget(event.target) || noteStore.editingId || !canvasStore.currentCanvasId) return;
-  if (noteStore.clipboard.length || drawingStore.clipboard.length || imageStore.clipboard.length) {
-    event.preventDefault();
-    pasteAtCenter();
-  }
-}
-
 async function pasteImageFromSystemClipboardAtContext() {
   if (!canvasStore.currentCanvasId) return;
   const clientX = contextMenu.value?.x;
@@ -927,19 +919,6 @@ function redo() {
 function duplicateObjectsForContext(type: CanvasObjectType, id: string) {
   ensureContextSelection(type, id);
   duplicateSelectedObjects();
-}
-
-function copySelectedObjects() {
-  const hasNotes = Boolean(noteStore.selectedIds.length);
-  const hasDrawings = Boolean(drawingStore.selectedIds.length);
-  const hasImages = Boolean(imageStore.selectedIds.length);
-  noteStore.clipboard = [];
-  drawingStore.clipboard = [];
-  imageStore.clipboard = [];
-  if (!hasNotes && !hasDrawings && !hasImages) return;
-  if (noteStore.selectedIds.length) noteStore.copySelected();
-  if (drawingStore.selectedIds.length) drawingStore.copySelected();
-  if (imageStore.selectedIds.length) imageStore.copySelected();
 }
 
 function duplicateSelectedObjects() {
@@ -1046,28 +1025,6 @@ function toggleImageBackgroundForContext(imageId: string) {
     imageStore.updateImage(imageId, { showBackground: image.showBackground === false });
   });
   contextMenu.value = null;
-}
-
-function pasteAtContext() {
-  captureCanvasHistory(() => {
-    const baseZ = globalMaxZ.value + 1;
-    noteStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y, baseZ);
-    drawingStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y, baseZ + noteStore.clipboard.length);
-    imageStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y, baseZ + noteStore.clipboard.length + drawingStore.clipboard.length);
-  });
-  contextMenu.value = null;
-}
-
-function pasteAtCenter() {
-  const rect = board.value?.getBoundingClientRect();
-  if (!rect || !canvasStore.currentCanvasId) return;
-  const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
-  captureCanvasHistory(() => {
-    const baseZ = globalMaxZ.value + 1;
-    noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y, baseZ);
-    drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y, baseZ + noteStore.clipboard.length);
-    imageStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y, baseZ + noteStore.clipboard.length + drawingStore.clipboard.length);
-  });
 }
 
 function changeDrawingColorForContext(color: string) {
@@ -1255,13 +1212,6 @@ function onKeydown(event: KeyboardEvent) {
     redo();
     return;
   }
-  if (event.ctrlKey && event.key.toLowerCase() === "c" && !noteStore.editingId) {
-    if (noteStore.selectedIds.length || drawingStore.selectedIds.length || imageStore.selectedIds.length) {
-      event.preventDefault();
-      copySelectedObjects();
-    }
-    return;
-  }
   if (event.ctrlKey && event.key.toLowerCase() === "d" && !noteStore.editingId) {
     if (noteStore.selectedIds.length || drawingStore.selectedIds.length || imageStore.selectedIds.length) {
       event.preventDefault();
@@ -1309,7 +1259,6 @@ onMounted(() => {
   void startImageDropListener().catch((error) => feedback.notify(`监听图片拖拽失败：${error instanceof Error ? error.message : String(error)}`, "error"));
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onKeyup);
-  window.addEventListener("paste", onPaste);
   window.addEventListener("locate-note", onLocateNote);
   window.addEventListener("resize", updateBoardSize);
 });
@@ -1322,7 +1271,6 @@ onUnmounted(() => {
   window.removeEventListener("mousemove", dragImageViewer);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
-  window.removeEventListener("paste", onPaste);
   window.removeEventListener("locate-note", onLocateNote);
   window.removeEventListener("resize", updateBoardSize);
   unlistenImageDrop?.();
@@ -1532,7 +1480,6 @@ watch(
         </div>
       </template>
       <template v-else-if="contextMenu.drawingId">
-        <button @click="copySelectedObjects(); contextMenu = null">复制</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
         <button @click="bringObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">
           {{ drawingStore.drawings.find((drawing) => drawing.id === contextMenu!.drawingId)?.pinned ? "取消置顶" : "置顶" }}
@@ -1552,7 +1499,6 @@ watch(
       </template>
       <template v-else-if="contextMenu.imageId">
         <button @click="openImageViewer(imageStore.images.find((image) => image.id === contextMenu!.imageId)!); contextMenu = null">查看</button>
-        <button @click="copySelectedObjects(); contextMenu = null">复制</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
         <button @click="bringObjectForContext('image', contextMenu!.imageId!); contextMenu = null">
           {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.pinned ? "取消置顶" : "置顶" }}
@@ -1565,7 +1511,6 @@ watch(
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
         <button @click="addImageAt(contextMenu!.x, contextMenu!.y); contextMenu = null">添加图片</button>
-        <button :disabled="!noteStore.clipboard.length && !drawingStore.clipboard.length && !imageStore.clipboard.length" @click="pasteAtContext">粘贴</button>
         <button @click="pasteImageFromSystemClipboardAtContext">从系统剪贴板粘贴图片</button>
         <button @click="fitView(); contextMenu = null">适应视图</button>
         <button @click="resetZoom(); contextMenu = null">重置缩放</button>

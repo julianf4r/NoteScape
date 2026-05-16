@@ -32,24 +32,6 @@ function moveDrawingFrom(before: DrawingItem, deltaX: number, deltaY: number): P
   };
 }
 
-function drawingBounds(drawing: DrawingItem) {
-  if (drawing.type === "pen") {
-    const points = drawing.points ?? [];
-    if (!points.length) return null;
-    const xs = points.map((point) => point.x);
-    const ys = points.map((point) => point.y);
-    return { minX: Math.min(...xs), minY: Math.min(...ys) };
-  }
-  if (drawing.type === "arrow" || drawing.type === "line") {
-    if (!drawing.start || !drawing.end) return null;
-    return {
-      minX: Math.min(drawing.start.x, drawing.end.x),
-      minY: Math.min(drawing.start.y, drawing.end.y),
-    };
-  }
-  return { minX: drawing.x ?? 0, minY: drawing.y ?? 0 };
-}
-
 const hasMeaningfulChange = (before: DrawingItem, after: DrawingItem) =>
   JSON.stringify({ ...before, updatedAt: undefined }) !== JSON.stringify({ ...after, updatedAt: undefined });
 
@@ -58,7 +40,6 @@ export const useDrawingStore = defineStore("drawing", {
     drawings: [] as DrawingItem[],
     selectedId: "",
     selectedIds: [] as string[],
-    clipboard: [] as DrawingItem[],
     tool: "select" as DrawingTool,
     color: "#ff0000",
     strokeWidth: 8,
@@ -155,11 +136,6 @@ export const useDrawingStore = defineStore("drawing", {
     deleteSelected() {
       [...this.selectedIds].forEach((id) => this.deleteDrawing(id));
     },
-    copySelected() {
-      this.clipboard = this.drawings
-        .filter((drawing) => this.selectedIds.includes(drawing.id))
-        .map(cloneDrawing);
-    },
     duplicateSelected(baseZ?: number) {
       if (!this.selectedIds.length) return;
       const copies = this.drawings
@@ -190,28 +166,6 @@ export const useDrawingStore = defineStore("drawing", {
         drawing.zIndex = baseZ + index + 1;
         drawing.updatedAt = now();
         if (hasMeaningfulChange(before, drawing)) this.addHistory({ type: "update", before, after: cloneDrawing(drawing) });
-        saveDrawingSafely(drawing);
-      });
-    },
-    pasteClipboard(canvasId: string, x: number, y: number, baseZ?: number) {
-      if (!this.clipboard.length) return;
-      const bounds = this.clipboard.map(drawingBounds).filter(Boolean) as Array<{ minX: number; minY: number }>;
-      if (!bounds.length) return;
-      const minX = Math.min(...bounds.map((bound) => bound.minX));
-      const minY = Math.min(...bounds.map((bound) => bound.minY));
-      const copies = this.clipboard.map((drawing, index) => ({
-        ...cloneDrawing(drawing),
-        ...moveDrawingFrom(drawing, x - minX + index * 8, y - minY + index * 8),
-        id: nanoid(),
-        canvasId,
-        zIndex: baseZ === undefined ? this.maxZ + index + 1 : baseZ + index,
-        createdAt: now(),
-        updatedAt: now(),
-      }));
-      this.drawings.push(...copies);
-      this.setSelection(copies.map((drawing) => drawing.id));
-      copies.forEach((drawing) => {
-        this.addHistory({ type: "create", after: cloneDrawing(drawing) });
         saveDrawingSafely(drawing);
       });
     },

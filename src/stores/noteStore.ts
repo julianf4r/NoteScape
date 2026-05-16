@@ -23,7 +23,6 @@ export const useNoteStore = defineStore("note", {
     editingId: "",
     history: [] as HistoryEntry[],
     future: [] as HistoryEntry[],
-    clipboard: [] as StickyNote[],
   }),
   getters: {
     selectedNote: (state) => state.notes.find((note) => note.id === state.selectedIds[0]),
@@ -174,33 +173,6 @@ export const useNoteStore = defineStore("note", {
         id: nanoid(),
         x: note.x + 28 + index * 8,
         y: note.y + 28 + index * 8,
-        zIndex: baseZ === undefined ? this.maxZForPinned(pinnedValue(note)) + index + 1 : baseZ + index,
-        createdAt: now(),
-        updatedAt: now(),
-      }));
-      this.notes.push(...copies);
-      if (baseZ === undefined) this.normalizeZIndexes().forEach(saveNoteSafely);
-      this.selectedIds = copies.map((note) => note.id);
-      copies.forEach((note) => {
-        this.addHistory({ type: "create", after: { ...note } });
-        saveNoteSafely(note);
-      });
-    },
-    copySelected() {
-      this.clipboard = this.notes
-        .filter((note) => this.selectedIds.includes(note.id))
-        .map((note) => ({ ...note, tags: [...note.tags] }));
-    },
-    pasteClipboard(canvasId: string, x: number, y: number, baseZ?: number) {
-      if (!this.clipboard.length) return;
-      const minX = Math.min(...this.clipboard.map((note) => note.x));
-      const minY = Math.min(...this.clipboard.map((note) => note.y));
-      const copies = this.clipboard.map((note, index) => ({
-        ...note,
-        id: nanoid(),
-        canvasId,
-        x: x + (note.x - minX) + index * 8,
-        y: y + (note.y - minY) + index * 8,
         zIndex: baseZ === undefined ? this.maxZForPinned(pinnedValue(note)) + index + 1 : baseZ + index,
         createdAt: now(),
         updatedAt: now(),

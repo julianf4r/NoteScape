@@ -27,7 +27,6 @@ export const useImageStore = defineStore("image", {
     selectedIds: [] as string[],
     history: [] as ImageHistoryEntry[],
     future: [] as ImageHistoryEntry[],
-    clipboard: [] as CanvasImage[],
   }),
   getters: {
     maxZ: (state) => Math.max(0, ...state.images.map((image) => image.zIndex)),
@@ -124,11 +123,6 @@ export const useImageStore = defineStore("image", {
     deleteSelected() {
       [...this.selectedIds].forEach((id) => this.deleteImage(id));
     },
-    copySelected() {
-      this.clipboard = this.images
-        .filter((image) => this.selectedIds.includes(image.id))
-        .map(cloneImage);
-    },
     duplicateSelected(baseZ?: number) {
       const selected = this.images.filter((image) => this.selectedIds.includes(image.id));
       if (!selected.length) return;
@@ -137,25 +131,6 @@ export const useImageStore = defineStore("image", {
         image.canvasId,
         image.x + 28 + index * 8,
         image.y + 28 + index * 8,
-        index,
-        baseZ === undefined ? undefined : baseZ + index,
-      ));
-      this.images.push(...copies);
-      this.selectedIds = copies.map((image) => image.id);
-      copies.forEach((image) => {
-        this.addHistory({ type: "create", after: cloneImage(image) });
-        saveImageSafely(image);
-      });
-    },
-    pasteClipboard(canvasId: string, x: number, y: number, baseZ?: number) {
-      if (!this.clipboard.length) return;
-      const minX = Math.min(...this.clipboard.map((image) => image.x));
-      const minY = Math.min(...this.clipboard.map((image) => image.y));
-      const copies = this.clipboard.map((image, index) => this.cloneImageToCanvas(
-        image,
-        canvasId,
-        x + (image.x - minX) + index * 8,
-        y + (image.y - minY) + index * 8,
         index,
         baseZ === undefined ? undefined : baseZ + index,
       ));
