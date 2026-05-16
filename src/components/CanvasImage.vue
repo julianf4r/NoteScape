@@ -84,9 +84,17 @@ function startResize(event: MouseEvent) {
 
 function resize(event: MouseEvent) {
   if (!resizeStart.value) return;
+  const before = resizeStart.value.before;
+  const aspectRatio = before.width / Math.max(1, before.height);
+  const deltaX = (event.clientX - resizeStart.value.x) / props.scale;
+  const deltaY = (event.clientY - resizeStart.value.y) / props.scale;
+  const diagonalLength = Math.hypot(before.width, before.height) || 1;
+  const projectedDelta = (deltaX * before.width + deltaY * before.height) / diagonalLength;
+  const scale = Math.min(1000 / before.width, Math.max(80 / before.width, (diagonalLength + projectedDelta) / diagonalLength));
+  const width = before.width * scale;
   emit("live", {
-    width: Math.min(1000, Math.max(80, resizeStart.value.before.width + (event.clientX - resizeStart.value.x) / props.scale)),
-    height: Math.min(1000, Math.max(80, resizeStart.value.before.height + (event.clientY - resizeStart.value.y) / props.scale)),
+    width,
+    height: width / aspectRatio,
   });
 }
 
