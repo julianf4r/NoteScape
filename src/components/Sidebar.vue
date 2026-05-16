@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, ref } from "vue";
-import { Archive, ArrowDown, ArrowUp, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { Archive, ArrowDown, ArrowUp, Ellipsis, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
 import SearchBox from "./SearchBox.vue";
 import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
@@ -25,6 +25,7 @@ const renamingTagId = ref("");
 const tagDraft = ref("");
 const tagColorDraft = ref("#3b82f6");
 const collapsed = ref(false);
+const openCanvasMenuId = ref("");
 const appVersion = packageInfo.version;
 const hasSearchQuery = computed(() => Boolean(canvasStore.searchQuery.trim()));
 
@@ -107,7 +108,27 @@ function cancelRename() {
 
 function selectCanvas(id: string) {
   showTrash.value = false;
+  openCanvasMenuId.value = "";
   canvasStore.selectCanvas(id);
+}
+
+function toggleCanvasMenu(id: string) {
+  openCanvasMenuId.value = openCanvasMenuId.value === id ? "" : id;
+}
+
+function moveCanvas(id: string, delta: -1 | 1) {
+  canvasStore.moveCanvas(id, delta);
+  openCanvasMenuId.value = "";
+}
+
+function renameCanvasFromMenu(id: string, name: string) {
+  openCanvasMenuId.value = "";
+  startRename(id, name);
+}
+
+async function deleteCanvasFromMenu(id: string, name: string) {
+  openCanvasMenuId.value = "";
+  await deleteCanvas(id, name);
 }
 
 async function deleteCanvas(id: string, name: string) {
@@ -202,6 +223,18 @@ function selectSearchCanvas(id: string) {
   selectCanvas(id);
   canvasStore.searchQuery = "";
 }
+
+function closeCanvasMenu() {
+  openCanvasMenuId.value = "";
+}
+
+onMounted(() => {
+  window.addEventListener("mousedown", closeCanvasMenu);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("mousedown", closeCanvasMenu);
+});
 </script>
 
 <template>
@@ -256,33 +289,39 @@ function selectSearchCanvas(id: string) {
 
         <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
 
-        <button
-          v-for="canvas in filteredCanvases"
-          :key="canvas.id"
-          class="canvas-row"
-          :class="{ active: canvas.id === canvasStore.currentCanvasId && !showTrash }"
-          @click="selectCanvas(canvas.id)"
-          @dblclick="startRename(canvas.id, canvas.name)"
-          @contextmenu.prevent="startRename(canvas.id, canvas.name)"
-        >
-          <FileText :size="16" />
-          <input
-            v-if="renamingId === canvas.id"
-            v-model="renameDraft"
-            :data-rename-id="canvas.id"
-            @click.stop
-            @keydown.enter.stop.prevent="commitRename(canvas.id)"
-            @keydown.esc.stop.prevent="cancelRename"
-            @blur="commitRename(canvas.id)"
-          />
-          <span v-else class="name">{{ canvas.name }}</span>
-          <span class="row-actions">
-            <button title="上移" :disabled="!canMoveCanvasUp(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, -1)"><ArrowUp :size="14" /></button>
-            <button title="下移" :disabled="!canMoveCanvasDown(canvas.id)" @click.stop="canvasStore.moveCanvas(canvas.id, 1)"><ArrowDown :size="14" /></button>
-            <button title="重命名" @click.stop="startRename(canvas.id, canvas.name)"><Pencil :size="14" /></button>
-            <button title="删除" @click.stop="deleteCanvas(canvas.id, canvas.name)"><Trash2 :size="14" /></button>
-          </span>
-        </button>
+        <div v-for="canvas in filteredCanvases" :key="canvas.id" class="canvas-row-wrap">
+          <div
+            class="canvas-row"
+            :class="{ active: canvas.id === canvasStore.currentCanvasId && !showTrash }"
+            role="button"
+            tabindex="0"
+            @click="selectCanvas(canvas.id)"
+            @dblclick="startRename(canvas.id, canvas.name)"
+            @contextmenu.prevent="renameCanvasFromMenu(canvas.id, canvas.name)"
+            @keydown.enter.prevent="selectCanvas(canvas.id)"
+          >
+            <FileText :size="16" />
+            <input
+              v-if="renamingId === canvas.id"
+              v-model="renameDraft"
+              :data-rename-id="canvas.id"
+              @click.stop
+              @keydown.enter.stop.prevent="commitRename(canvas.id)"
+              @keydown.esc.stop.prevent="cancelRename"
+              @blur="commitRename(canvas.id)"
+            />
+            <span v-else class="name">{{ canvas.name }}</span>
+            <span class="row-actions">
+              <button title="更多" @mousedown.stop @click.stop="toggleCanvasMenu(canvas.id)"><Ellipsis :size="16" /></button>
+            </span>
+          </div>
+          <div v-if="openCanvasMenuId === canvas.id" class="canvas-action-menu" @mousedown.stop @click.stop>
+            <button :disabled="!canMoveCanvasUp(canvas.id)" @click="moveCanvas(canvas.id, -1)"><ArrowUp :size="14" />上移</button>
+            <button :disabled="!canMoveCanvasDown(canvas.id)" @click="moveCanvas(canvas.id, 1)"><ArrowDown :size="14" />下移</button>
+            <button @click="renameCanvasFromMenu(canvas.id, canvas.name)"><Pencil :size="14" />重命名</button>
+            <button class="danger" @click="deleteCanvasFromMenu(canvas.id, canvas.name)"><Trash2 :size="14" />删除</button>
+          </div>
+        </div>
 
         <button class="canvas-row trash" :class="{ active: showTrash }" @click="showTrash = !showTrash">
           <Archive :size="16" />
@@ -301,7 +340,7 @@ function selectSearchCanvas(id: string) {
         </div>
         </section>
 
-        <section class="section tags">
+        <section class="section tags" @mousedown="openCanvasMenuId = ''">
         <div class="section-title">
           <span>标签</span>
           <button class="small-add" :disabled="!appStore.databaseReady" @click="createTag"><Plus :size="18" /></button>
@@ -484,6 +523,7 @@ function selectSearchCanvas(id: string) {
   background: transparent;
   border-radius: 7px;
   text-align: left;
+  cursor: var(--cursor-pointer);
 }
 
 .result-group button:hover {
@@ -565,6 +605,10 @@ function selectSearchCanvas(id: string) {
   text-align: left;
 }
 
+.canvas-row-wrap {
+  position: relative;
+}
+
 .canvas-row {
   padding-right: 8px;
 }
@@ -613,12 +657,11 @@ function selectSearchCanvas(id: string) {
 }
 
 .row-actions {
-  display: none;
+  display: inline-flex;
   align-items: center;
   gap: 2px;
 }
 
-.canvas-row:hover .row-actions,
 .tag-row:hover .tag-actions {
   display: inline-flex;
 }
@@ -651,6 +694,47 @@ function selectSearchCanvas(id: string) {
 .row-actions button:disabled {
   cursor: var(--cursor-default);
   opacity: 0.34;
+}
+
+.canvas-action-menu {
+  position: absolute;
+  top: calc(100% - 2px);
+  right: 8px;
+  z-index: 20;
+  width: 112px;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.canvas-action-menu button {
+  width: 100%;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+  color: #374151;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.canvas-action-menu button:hover {
+  background: #f3f6fb;
+}
+
+.canvas-action-menu button:disabled {
+  cursor: var(--cursor-default);
+  color: #aeb6c2;
+  background: transparent;
+}
+
+.canvas-action-menu button.danger {
+  color: #b91c1c;
 }
 
 .tag-actions button:disabled {
