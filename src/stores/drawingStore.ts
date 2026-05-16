@@ -159,7 +159,7 @@ export const useDrawingStore = defineStore("drawing", {
         .filter((drawing) => this.selectedIds.includes(drawing.id))
         .map(cloneDrawing);
     },
-    duplicateSelected() {
+    duplicateSelected(baseZ?: number) {
       if (!this.selectedIds.length) return;
       const copies = this.drawings
         .filter((drawing) => this.selectedIds.includes(drawing.id))
@@ -167,7 +167,7 @@ export const useDrawingStore = defineStore("drawing", {
           ...cloneDrawing(drawing),
           ...moveDrawingFrom(drawing, 28 + index * 8, 28 + index * 8),
           id: nanoid(),
-          zIndex: this.maxZ + index + 1,
+          zIndex: baseZ === undefined ? this.maxZ + index + 1 : baseZ + index,
           createdAt: now(),
           updatedAt: now(),
         }));
@@ -190,7 +190,7 @@ export const useDrawingStore = defineStore("drawing", {
         saveDrawingSafely(drawing);
       });
     },
-    pasteClipboard(canvasId: string, x: number, y: number) {
+    pasteClipboard(canvasId: string, x: number, y: number, baseZ?: number) {
       if (!this.clipboard.length) return;
       const bounds = this.clipboard.map(drawingBounds).filter(Boolean) as Array<{ minX: number; minY: number }>;
       if (!bounds.length) return;
@@ -201,7 +201,7 @@ export const useDrawingStore = defineStore("drawing", {
         ...moveDrawingFrom(drawing, x - minX + index * 8, y - minY + index * 8),
         id: nanoid(),
         canvasId,
-        zIndex: this.maxZ + index + 1,
+        zIndex: baseZ === undefined ? this.maxZ + index + 1 : baseZ + index,
         createdAt: now(),
         updatedAt: now(),
       }));

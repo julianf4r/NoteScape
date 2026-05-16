@@ -55,6 +55,7 @@ export const useImageStore = defineStore("image", {
       y: number;
       width: number;
       height: number;
+      zIndex?: number;
       rotationEnabled?: boolean;
     }) {
       const image: CanvasImage = {
@@ -68,7 +69,7 @@ export const useImageStore = defineStore("image", {
         width: patch.width,
         height: patch.height,
         rotation: patch.rotationEnabled === false ? 0 : randomRotation(),
-        zIndex: this.maxZ + 1,
+        zIndex: patch.zIndex ?? this.maxZ + 1,
         pinned: false,
         createdAt: now(),
         updatedAt: now(),
@@ -79,14 +80,14 @@ export const useImageStore = defineStore("image", {
       saveImageSafely(image);
       return image;
     },
-    cloneImageToCanvas(image: CanvasImage, canvasId: string, x: number, y: number, index = 0) {
+    cloneImageToCanvas(image: CanvasImage, canvasId: string, x: number, y: number, index = 0, zIndex?: number) {
       const copy: CanvasImage = {
         ...cloneImage(image),
         id: nanoid(),
         canvasId,
         x,
         y,
-        zIndex: this.maxZ + index + 1,
+        zIndex: zIndex ?? this.maxZ + index + 1,
         createdAt: now(),
         updatedAt: now(),
       };
@@ -127,7 +128,7 @@ export const useImageStore = defineStore("image", {
         .filter((image) => this.selectedIds.includes(image.id))
         .map(cloneImage);
     },
-    duplicateSelected() {
+    duplicateSelected(baseZ?: number) {
       const selected = this.images.filter((image) => this.selectedIds.includes(image.id));
       if (!selected.length) return;
       const copies = selected.map((image, index) => this.cloneImageToCanvas(
@@ -136,6 +137,7 @@ export const useImageStore = defineStore("image", {
         image.x + 28 + index * 8,
         image.y + 28 + index * 8,
         index,
+        baseZ === undefined ? undefined : baseZ + index,
       ));
       this.images.push(...copies);
       this.selectedIds = copies.map((image) => image.id);
@@ -144,7 +146,7 @@ export const useImageStore = defineStore("image", {
         saveImageSafely(image);
       });
     },
-    pasteClipboard(canvasId: string, x: number, y: number) {
+    pasteClipboard(canvasId: string, x: number, y: number, baseZ?: number) {
       if (!this.clipboard.length) return;
       const minX = Math.min(...this.clipboard.map((image) => image.x));
       const minY = Math.min(...this.clipboard.map((image) => image.y));
@@ -154,6 +156,7 @@ export const useImageStore = defineStore("image", {
         x + (image.x - minX) + index * 8,
         y + (image.y - minY) + index * 8,
         index,
+        baseZ === undefined ? undefined : baseZ + index,
       ));
       this.images.push(...copies);
       this.selectedIds = copies.map((image) => image.id);

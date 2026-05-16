@@ -63,6 +63,23 @@ const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.
 const activeTag = computed(() => tagStore.activeTag);
 const searchText = computed(() => canvasStore.searchQuery.trim());
 type CanvasObjectType = "note" | "drawing" | "image";
+type CanvasHistoryBatch = { notes: number; drawings: number; images: number };
+type CanvasObjectRef =
+  | { type: "note"; item: StickyNoteType }
+  | { type: "drawing"; item: DrawingItem }
+  | { type: "image"; item: CanvasImageType };
+const canvasHistory = ref<CanvasHistoryBatch[]>([]);
+const canvasFuture = ref<CanvasHistoryBatch[]>([]);
+const pinnedZOffset = 100000;
+
+const globalMaxZ = computed(() =>
+  Math.max(
+    0,
+    ...noteStore.notes.map((note) => objectLayerZ({ type: "note", item: note })),
+    ...drawingStore.drawings.map((drawing) => drawing.zIndex),
+    ...imageStore.images.map((image) => objectLayerZ({ type: "image", item: image })),
+  ),
+);
 
 const canvasClass = computed(() => ({
   "hide-grid": !settingsStore.settings.showGrid,
@@ -76,13 +93,17 @@ function createNoteAt(clientX: number, clientY: number) {
   if (!canvasStore.currentCanvasId || !board.value) return;
   const rect = board.value.getBoundingClientRect();
   const point = screenToWorld(clientX, clientY, viewport, rect);
-  noteStore.createNote(
-    canvasStore.currentCanvasId,
-    point.x - 110,
-    point.y - 90,
-    settingsStore.settings.defaultFontSize,
-    settingsStore.settings.randomRotation,
-  );
+  captureCanvasHistory(() => {
+    noteStore.createNote(
+      canvasStore.currentCanvasId,
+      point.x - 110,
+      point.y - 90,
+      settingsStore.settings.defaultFontSize,
+      settingsStore.settings.randomRotation,
+      "",
+      globalMaxZ.value + 1,
+    );
+  });
 }
 
 function zoomBy(delta: number, originX?: number, originY?: number) {
@@ -258,7 +279,7 @@ function startDrawing(event: MouseEvent) {
     : drawingStore.tool === "arrow" || drawingStore.tool === "line"
       ? { start: point, end: point }
       : { start: point, x: point.x, y: point.y, width: 0, height: 0 };
-  const drawing = drawingStore.createDrawing(canvasStore.currentCanvasId, base);
+  const drawing = drawingStore.createDrawing(canvasStore.currentCanvasId, { ...base, zIndex: globalMaxZ.value + 1 });
   activeDrawingId.value = drawing.id;
   window.addEventListener("mousemove", updateDrawing);
   window.addEventListener("mouseup", finishDrawing, { once: true });
@@ -292,7 +313,7 @@ function finishDrawing() {
   window.removeEventListener("mousemove", updateDrawing);
   const drawing = drawingStore.drawings.find((item) => item.id === activeDrawingId.value);
   if (drawing && isMeaningfulDrawing(drawing)) {
-    drawingStore.finishDrawing(drawing.id);
+    captureCanvasHistory(() => drawingStore.finishDrawing(drawing.id));
   } else if (drawing) {
     drawingStore.deleteDrawing(drawing.id, false);
     if (clearSelectionAfterTinyDrawing.value) clearObjectSelection();
@@ -395,6 +416,70 @@ function selectedObjectCount() {
   return noteStore.selectedIds.length + drawingStore.selectedIds.length + imageStore.selectedIds.length;
 }
 
+function selectedObjectRefs() {
+  const refs: CanvasObjectRef[] = [
+    ...noteStore.notes
+      .filter((note) => noteStore.selectedIds.includes(note.id))
+      .map((item) => ({ type: "note" as const, item })),
+    ...drawingStore.drawings
+      .filter((drawing) => drawingStore.selectedIds.includes(drawing.id))
+      .map((item) => ({ type: "drawing" as const, item })),
+    ...imageStore.images
+      .filter((image) => imageStore.selectedIds.includes(image.id))
+      .map((item) => ({ type: "image" as const, item })),
+  ];
+  return refs.sort((a, b) => objectLayerZ(a) - objectLayerZ(b));
+}
+
+function objectLayerZ(ref: CanvasObjectRef) {
+  if (ref.type === "note") return (ref.item.pinned ? pinnedZOffset : 0) + ref.item.zIndex;
+  if (ref.type === "image") return (ref.item.pinned ? pinnedZOffset : 0) + ref.item.zIndex;
+  return ref.item.zIndex;
+}
+
+function drawingLayerStyle(drawing: DrawingItem) {
+  return { zIndex: drawing.zIndex };
+}
+
+function historyCounts(): CanvasHistoryBatch {
+  return {
+    notes: noteStore.history.length,
+    drawings: drawingStore.history.length,
+    images: imageStore.history.length,
+  };
+}
+
+function pushCanvasHistory(batch: CanvasHistoryBatch) {
+  if (!batch.notes && !batch.drawings && !batch.images) return;
+  canvasHistory.value.push(batch);
+  if (canvasHistory.value.length > 50) canvasHistory.value.shift();
+  canvasFuture.value = [];
+}
+
+function recordCanvasHistoryChange(before: CanvasHistoryBatch) {
+  const after = historyCounts();
+  pushCanvasHistory({
+    notes: Math.max(0, after.notes - before.notes),
+    drawings: Math.max(0, after.drawings - before.drawings),
+    images: Math.max(0, after.images - before.images),
+  });
+}
+
+function captureCanvasHistory<T>(operation: () => T): T {
+  const before = historyCounts();
+  const result = operation();
+  recordCanvasHistoryChange(before);
+  return result;
+}
+
+function undoStoreEntries(undoFn: () => boolean | void, count: number) {
+  for (let index = 0; index < count; index += 1) undoFn();
+}
+
+function redoStoreEntries(redoFn: () => boolean | void, count: number) {
+  for (let index = 0; index < count; index += 1) redoFn();
+}
+
 function startMixedDrag(event: MouseEvent) {
   mixedDrag.value = {
     startX: event.clientX,
@@ -419,9 +504,11 @@ function dragMixed(event: MouseEvent) {
 function endMixedDrag() {
   window.removeEventListener("mousemove", dragMixed);
   if (mixedDrag.value) {
-    noteStore.commitSelectedMove(mixedDrag.value.beforeNotes);
-    drawingStore.commitSelectedMove(mixedDrag.value.beforeDrawings);
-    imageStore.commitSelectedMove(mixedDrag.value.beforeImages);
+    captureCanvasHistory(() => {
+      noteStore.commitSelectedMove(mixedDrag.value!.beforeNotes);
+      drawingStore.commitSelectedMove(mixedDrag.value!.beforeDrawings);
+      imageStore.commitSelectedMove(mixedDrag.value!.beforeImages);
+    });
   }
   mixedDrag.value = null;
 }
@@ -433,7 +520,7 @@ function dragGroup(event: MouseEvent) {
 
 function endGroupDrag() {
   window.removeEventListener("mousemove", dragGroup);
-  if (groupDrag.value) noteStore.commitSelectedMove(groupDrag.value.before);
+  if (groupDrag.value) captureCanvasHistory(() => noteStore.commitSelectedMove(groupDrag.value!.before));
   groupDrag.value = null;
 }
 
@@ -442,19 +529,23 @@ function deleteObjectForContext(type: CanvasObjectType, id: string) {
     deleteSelectedObjects();
     return;
   }
-  if (type === "note") noteStore.deleteNote(id);
-  else if (type === "drawing") drawingStore.deleteDrawing(id);
-  else imageStore.deleteImage(id);
+  captureCanvasHistory(() => {
+    if (type === "note") noteStore.deleteNote(id);
+    else if (type === "drawing") drawingStore.deleteDrawing(id);
+    else imageStore.deleteImage(id);
+  });
 }
 
 function deleteSelectedDrawing() {
-  if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
+  if (drawingStore.selectedIds.length) captureCanvasHistory(() => drawingStore.deleteSelected());
 }
 
 function deleteSelectedObjects() {
-  if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
-  if (noteStore.selectedIds.length) noteStore.deleteSelected();
-  if (imageStore.selectedIds.length) imageStore.deleteSelected();
+  captureCanvasHistory(() => {
+    if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
+    if (noteStore.selectedIds.length) noteStore.deleteSelected();
+    if (imageStore.selectedIds.length) imageStore.deleteSelected();
+  });
 }
 
 function clearObjectSelection() {
@@ -539,13 +630,13 @@ function editDrawing(event: MouseEvent) {
 
 function endDrawingDrag() {
   window.removeEventListener("mousemove", dragDrawing);
-  if (drawingDrag.value) drawingStore.commitDrawingMove(drawingDrag.value.before);
+  if (drawingDrag.value) captureCanvasHistory(() => drawingStore.commitDrawingMove(drawingDrag.value!.before));
   drawingDrag.value = null;
 }
 
 function endDrawingEdit() {
   window.removeEventListener("mousemove", editDrawing);
-  if (drawingEdit.value) drawingStore.commitDrawingMove(drawingEdit.value.before);
+  if (drawingEdit.value) captureCanvasHistory(() => drawingStore.commitDrawingMove(drawingEdit.value!.before));
   drawingEdit.value = null;
 }
 
@@ -571,8 +662,10 @@ function onImagePointerDown(event: MouseEvent, image: CanvasImageType) {
 
 function updateImage(image: CanvasImageType, patch: Partial<CanvasImageType> & { __before?: CanvasImageType }, track = true) {
   const { __before, ...cleanPatch } = patch;
-  if (__before) imageStore.commitImageChange(__before, cleanPatch);
-  else imageStore.updateImage(image.id, cleanPatch, track);
+  captureCanvasHistory(() => {
+    if (__before) imageStore.commitImageChange(__before, cleanPatch);
+    else imageStore.updateImage(image.id, cleanPatch, track);
+  });
 }
 
 async function addImageAt(clientX?: number, clientY?: number) {
@@ -616,15 +709,18 @@ async function createImportedImage(imported: Awaited<ReturnType<typeof importIma
   const point = clientX !== undefined && clientY !== undefined
     ? screenToWorld(clientX, clientY, viewport, rect)
     : screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
-  imageStore.createImage(canvasStore.currentCanvasId, {
-    fileName: imported.fileName,
-    originalName: imported.originalName,
-    contentHash: imported.contentHash,
-    x: point.x - size.width / 2 + index * 18,
-    y: point.y - size.height / 2 + index * 18,
-    width: size.width,
-    height: size.height,
-    rotationEnabled: settingsStore.settings.randomRotation,
+  captureCanvasHistory(() => {
+    imageStore.createImage(canvasStore.currentCanvasId, {
+      fileName: imported.fileName,
+      originalName: imported.originalName,
+      contentHash: imported.contentHash,
+      x: point.x - size.width / 2 + index * 18,
+      y: point.y - size.height / 2 + index * 18,
+      width: size.width,
+      height: size.height,
+      zIndex: globalMaxZ.value + 1 + index,
+      rotationEnabled: settingsStore.settings.randomRotation,
+    });
   });
   noteStore.clearSelection();
   drawingStore.clearSelection();
@@ -735,31 +831,32 @@ function cloneImage(image: CanvasImageType): CanvasImageType {
 }
 
 function undo() {
-  const preferImage = Boolean(imageStore.selectedIds.length);
-  if (preferImage) {
-    if (!imageStore.undo() && !drawingStore.undo() && noteStore.history.length) noteStore.undo();
+  const batch = canvasHistory.value.pop();
+  if (batch) {
+    undoStoreEntries(imageStore.undo, batch.images);
+    undoStoreEntries(drawingStore.undo, batch.drawings);
+    undoStoreEntries(noteStore.undo, batch.notes);
+    canvasFuture.value.push(batch);
     return;
   }
-  const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select");
-  if (preferDrawing) {
-    if (!drawingStore.undo() && !imageStore.undo() && noteStore.history.length) noteStore.undo();
-    return;
-  }
-  if (noteStore.history.length) noteStore.undo();
+  if (imageStore.selectedIds.length) imageStore.undo();
+  else if (drawingStore.selectedIds.length || drawingStore.tool !== "select") drawingStore.undo();
+  else if (noteStore.history.length) noteStore.undo();
   else if (!drawingStore.undo()) imageStore.undo();
 }
 
 function redo() {
-  if (imageStore.selectedIds.length) {
-    if (!imageStore.redo() && !drawingStore.redo() && noteStore.future.length) noteStore.redo();
+  const batch = canvasFuture.value.pop();
+  if (batch) {
+    redoStoreEntries(noteStore.redo, batch.notes);
+    redoStoreEntries(drawingStore.redo, batch.drawings);
+    redoStoreEntries(imageStore.redo, batch.images);
+    canvasHistory.value.push(batch);
     return;
   }
-  const preferDrawing = Boolean(drawingStore.selectedIds.length || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length));
-  if (preferDrawing) {
-    if (!drawingStore.redo() && !imageStore.redo() && noteStore.future.length) noteStore.redo();
-    return;
-  }
-  if (noteStore.future.length) noteStore.redo();
+  if (imageStore.selectedIds.length) imageStore.redo();
+  else if (drawingStore.selectedIds.length || drawingStore.tool !== "select" || (drawingStore.future.length && !noteStore.future.length)) drawingStore.redo();
+  else if (noteStore.future.length) noteStore.redo();
   else if (!drawingStore.redo()) imageStore.redo();
 }
 
@@ -782,18 +879,43 @@ function copySelectedObjects() {
 }
 
 function duplicateSelectedObjects() {
-  if (noteStore.selectedIds.length) {
-    if (noteStore.selectedIds.length > 1) noteStore.duplicateSelected();
-    else noteStore.duplicateNote(noteStore.selectedIds[0]);
-  }
-  if (drawingStore.selectedIds.length) drawingStore.duplicateSelected();
-  if (imageStore.selectedIds.length) imageStore.duplicateSelected();
+  captureCanvasHistory(() => {
+    const baseZ = globalMaxZ.value + 1;
+    const noteCount = noteStore.selectedIds.length;
+    const drawingCount = drawingStore.selectedIds.length;
+    if (noteStore.selectedIds.length) {
+      if (noteStore.selectedIds.length > 1) noteStore.duplicateSelected(baseZ);
+      else noteStore.duplicateNote(noteStore.selectedIds[0], baseZ);
+    }
+    if (drawingStore.selectedIds.length) drawingStore.duplicateSelected(baseZ + noteCount);
+    if (imageStore.selectedIds.length) imageStore.duplicateSelected(baseZ + noteCount + drawingCount);
+  });
 }
 
 function bringSelectedObjectsToFront() {
-  if (noteStore.selectedIds.length) noteStore.bringSelectedToFront();
-  if (drawingStore.selectedIds.length) drawingStore.bringSelectedToFront();
-  if (imageStore.selectedIds.length) imageStore.bringSelectedToFront();
+  captureCanvasHistory(() => {
+    const refs = selectedObjectRefs();
+    const selectedNotes = refs.filter((ref): ref is { type: "note"; item: StickyNoteType } => ref.type === "note");
+    const selectedImages = refs.filter((ref): ref is { type: "image"; item: CanvasImageType } => ref.type === "image");
+    const shouldTogglePinned = Boolean(selectedNotes.length || selectedImages.length);
+    const targetPinned = shouldTogglePinned
+      ? ![...selectedNotes.map((ref) => ref.item), ...selectedImages.map((ref) => ref.item)].every((item) => item.pinned === true)
+      : false;
+    const baseZ = globalMaxZ.value + 1;
+    refs.forEach((ref, index) => {
+      const zIndex = baseZ + index;
+      if (ref.type === "note") {
+        noteStore.updateNote(ref.item.id, { zIndex, pinned: targetPinned });
+      } else if (ref.type === "image") {
+        imageStore.updateImage(ref.item.id, { zIndex, pinned: targetPinned });
+      } else {
+        const before = cloneDrawing(ref.item);
+        drawingStore.updateDrawing(ref.item.id, { zIndex }, true);
+        const after = drawingStore.drawings.find((drawing) => drawing.id === ref.item.id);
+        if (after) drawingStore.addHistory({ type: "update", before, after: cloneDrawing(after) });
+      }
+    });
+  });
 }
 
 async function copyNoteText(noteId: string) {
@@ -823,28 +945,37 @@ function bringObjectForContext(type: CanvasObjectType, id: string) {
 }
 
 function updateSelection(note: StickyNoteType, patch: Partial<StickyNoteType> & { __before?: StickyNoteType }, track = true) {
-  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id) && !patch.__before) {
-    noteStore.updateSelected(patch);
-    return;
-  }
-  updateNote(note, patch, track);
+  captureCanvasHistory(() => {
+    if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(note.id) && !patch.__before) {
+      noteStore.updateSelected(patch);
+      return;
+    }
+    updateNote(note, patch, track);
+  });
 }
 
 function toggleTagForSelection(noteId: string, tagId: string) {
-  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.toggleTagForSelected(tagId);
-  else noteStore.toggleTagForNote(noteId, tagId);
+  captureCanvasHistory(() => {
+    if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.toggleTagForSelected(tagId);
+    else noteStore.toggleTagForNote(noteId, tagId);
+  });
 }
 
 function changeColorForContext(noteId: string, color: NoteColor) {
-  if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ color });
-  else noteStore.updateNote(noteId, { color });
+  captureCanvasHistory(() => {
+    if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ color });
+    else noteStore.updateNote(noteId, { color });
+  });
   contextMenu.value = null;
 }
 
 function pasteAtContext() {
-  noteStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
-  drawingStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
-  imageStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y);
+  captureCanvasHistory(() => {
+    const baseZ = globalMaxZ.value + 1;
+    noteStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y, baseZ);
+    drawingStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y, baseZ + noteStore.clipboard.length);
+    imageStore.pasteClipboard(canvasStore.currentCanvasId, contextWorld.value.x, contextWorld.value.y, baseZ + noteStore.clipboard.length + drawingStore.clipboard.length);
+  });
   contextMenu.value = null;
 }
 
@@ -852,26 +983,29 @@ function pasteAtCenter() {
   const rect = board.value?.getBoundingClientRect();
   if (!rect || !canvasStore.currentCanvasId) return;
   const point = screenToWorld(rect.left + rect.width / 2, rect.top + rect.height / 2, viewport, rect);
-  noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
-  drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
-  imageStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y);
+  captureCanvasHistory(() => {
+    const baseZ = globalMaxZ.value + 1;
+    noteStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y, baseZ);
+    drawingStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y, baseZ + noteStore.clipboard.length);
+    imageStore.pasteClipboard(canvasStore.currentCanvasId, point.x, point.y, baseZ + noteStore.clipboard.length + drawingStore.clipboard.length);
+  });
 }
 
 function changeDrawingColorForContext(color: string) {
   drawingStore.color = color;
-  if (drawingStore.selectedIds.length) drawingStore.updateSelected({ color });
+  if (drawingStore.selectedIds.length) captureCanvasHistory(() => drawingStore.updateSelected({ color }));
   contextMenu.value = null;
 }
 
 function setDrawingColor(color: string) {
   drawingStore.color = color;
-  if (drawingStore.selectedIds.length) drawingStore.updateSelected({ color });
+  if (drawingStore.selectedIds.length) captureCanvasHistory(() => drawingStore.updateSelected({ color }));
 }
 
 function setDrawingStrokeWidth(width: number) {
   const strokeWidth = Math.min(16, Math.max(1, width || 1));
   drawingStore.strokeWidth = strokeWidth;
-  if (drawingStore.selectedIds.length) drawingStore.updateSelected({ strokeWidth });
+  if (drawingStore.selectedIds.length) captureCanvasHistory(() => drawingStore.updateSelected({ strokeWidth }));
 }
 
 function startBoxSelect(event: MouseEvent) {
@@ -1149,10 +1283,13 @@ watch(
 
     <div v-if="appStore.databaseReady" class="canvas-content" :style="{ transform: `translate(${viewport.offsetX}px, ${viewport.offsetY}px) scale(${viewport.scale})` }">
       <DrawingLayer
+        v-for="drawing in currentCanvasDrawings"
+        :key="drawing.id"
         :canvas-id="canvasStore.currentCanvasId"
-        :drawings="currentCanvasDrawings"
+        :drawings="[drawing]"
         :scale="viewport.scale"
         :pan-mode="handActive || spaceDown"
+        :style="drawingLayerStyle(drawing)"
         @drag-drawing="startDrawingDrag"
         @edit-drawing="startDrawingEdit"
         @context-drawing="openDrawingMenu"

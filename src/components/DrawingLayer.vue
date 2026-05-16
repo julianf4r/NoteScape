@@ -411,7 +411,6 @@ function resizeHandlePoint(drawing: DrawingItem) {
 .drawing-layer {
   position: absolute;
   inset: 0;
-  z-index: 200001;
   pointer-events: none;
   overflow: visible;
 }

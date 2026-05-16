@@ -11,6 +11,8 @@ import { useNoteStore } from "../stores/noteStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
+import { useDrawingStore } from "../stores/drawingStore";
+import { useImageStore } from "../stores/imageStore";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -18,8 +20,19 @@ const noteStore = useNoteStore();
 const tagStore = useTagStore();
 const settingsStore = useSettingsStore();
 const feedbackStore = useFeedbackStore();
+const drawingStore = useDrawingStore();
+const imageStore = useImageStore();
 
 const noteTags = computed(() => noteStore.notes.flatMap((note) => note.tags));
+const pinnedZOffset = 100000;
+const globalMaxZ = computed(() =>
+  Math.max(
+    0,
+    ...noteStore.notes.map((note) => (note.pinned ? pinnedZOffset : 0) + note.zIndex),
+    ...drawingStore.drawings.map((drawing) => drawing.zIndex),
+    ...imageStore.images.map((image) => (image.pinned ? pinnedZOffset : 0) + image.zIndex),
+  ),
+);
 
 function isTextInputTarget(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
@@ -39,7 +52,7 @@ function onKeydown(event: KeyboardEvent) {
   }
   if (event.ctrlKey && event.key.toLowerCase() === "n" && canvasStore.currentCanvasId) {
     event.preventDefault();
-    noteStore.createNote(canvasStore.currentCanvasId, 360, 260, settingsStore.settings.defaultFontSize, settingsStore.settings.randomRotation);
+    noteStore.createNote(canvasStore.currentCanvasId, 360, 260, settingsStore.settings.defaultFontSize, settingsStore.settings.randomRotation, "", globalMaxZ.value + 1);
   }
 }
 
