@@ -70,6 +70,7 @@ type CanvasObjectRef =
   | { type: "image"; item: CanvasImageType };
 const canvasHistory = ref<CanvasHistoryBatch[]>([]);
 const canvasFuture = ref<CanvasHistoryBatch[]>([]);
+const pinnedZOffset = 100000;
 const globalMaxZ = computed(() =>
   Math.max(
     0,
@@ -433,11 +434,11 @@ function selectedObjectRefs() {
 }
 
 function objectLayerZ(ref: CanvasObjectRef) {
-  return ref.item.zIndex;
+  return (ref.item.pinned ? pinnedZOffset : 0) + ref.item.zIndex;
 }
 
 function drawingLayerStyle(drawing: DrawingItem) {
-  return { zIndex: drawing.zIndex };
+  return { zIndex: (drawing.pinned ? pinnedZOffset : 0) + drawing.zIndex };
 }
 
 function historyCounts(): CanvasHistoryBatch {
@@ -904,10 +905,16 @@ function bringSelectedObjectsToFront() {
   captureCanvasHistory(() => {
     const refs = selectedObjectRefs();
     const selectedNotes = refs.filter((ref): ref is { type: "note"; item: StickyNoteType } => ref.type === "note");
+    const selectedDrawings = refs.filter((ref): ref is { type: "drawing"; item: DrawingItem } => ref.type === "drawing");
     const selectedImages = refs.filter((ref): ref is { type: "image"; item: CanvasImageType } => ref.type === "image");
-    const shouldTogglePinned = Boolean(selectedNotes.length || selectedImages.length);
+    const selectedPinnedObjects = [
+      ...selectedNotes.map((ref) => ref.item),
+      ...selectedDrawings.map((ref) => ref.item),
+      ...selectedImages.map((ref) => ref.item),
+    ];
+    const shouldTogglePinned = Boolean(selectedPinnedObjects.length);
     const targetPinned = shouldTogglePinned
-      ? ![...selectedNotes.map((ref) => ref.item), ...selectedImages.map((ref) => ref.item)].every((item) => item.pinned === true)
+      ? !selectedPinnedObjects.every((item) => item.pinned === true)
       : false;
     const baseZ = globalMaxZ.value + 1;
     refs.forEach((ref, index) => {
@@ -918,7 +925,7 @@ function bringSelectedObjectsToFront() {
         imageStore.updateImage(ref.item.id, { zIndex, pinned: targetPinned });
       } else {
         const before = cloneDrawing(ref.item);
-        drawingStore.updateDrawing(ref.item.id, { zIndex }, true);
+        drawingStore.updateDrawing(ref.item.id, { zIndex, pinned: targetPinned }, true);
         const after = drawingStore.drawings.find((drawing) => drawing.id === ref.item.id);
         if (after) drawingStore.addHistory({ type: "update", before, after: cloneDrawing(after) });
       }
@@ -1438,7 +1445,9 @@ watch(
       <template v-else-if="contextMenu.drawingId">
         <button @click="copySelectedObjects(); contextMenu = null">复制</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
-        <button @click="bringObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">置顶</button>
+        <button @click="bringObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">
+          {{ drawingStore.drawings.find((drawing) => drawing.id === contextMenu!.drawingId)?.pinned ? "取消置顶" : "置顶" }}
+        </button>
         <button @click="deleteObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">删除</button>
         <div class="context-section">
           <span>颜色</span>

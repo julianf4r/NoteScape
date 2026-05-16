@@ -91,6 +91,7 @@ export const useDrawingStore = defineStore("drawing", {
         color: this.color,
         strokeWidth: this.strokeWidth,
         zIndex: this.maxZ + 1,
+        pinned: false,
         createdAt: now(),
         updatedAt: now(),
         ...patch,
@@ -181,9 +182,11 @@ export const useDrawingStore = defineStore("drawing", {
     bringSelectedToFront() {
       const selected = this.drawings.filter((drawing) => this.selectedIds.includes(drawing.id));
       if (!selected.length) return;
+      const targetPinned = !selected.every((drawing) => drawing.pinned === true);
       const baseZ = this.maxZ;
       selected.forEach((drawing, index) => {
         const before = cloneDrawing(drawing);
+        drawing.pinned = targetPinned;
         drawing.zIndex = baseZ + index + 1;
         drawing.updatedAt = now();
         if (hasMeaningfulChange(before, drawing)) this.addHistory({ type: "update", before, after: cloneDrawing(drawing) });

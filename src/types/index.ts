@@ -31,6 +31,7 @@ export interface DrawingItem {
   color: string;
   strokeWidth: number;
   zIndex: number;
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }

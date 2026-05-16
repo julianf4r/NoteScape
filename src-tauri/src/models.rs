@@ -101,6 +101,8 @@ pub(crate) struct DrawingItem {
     pub(crate) color: String,
     pub(crate) stroke_width: f64,
     pub(crate) z_index: i64,
+    #[serde(default)]
+    pub(crate) pinned: bool,
     pub(crate) created_at: String,
     pub(crate) updated_at: String,
 }
