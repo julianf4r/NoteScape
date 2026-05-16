@@ -109,7 +109,7 @@ function endResize() {
 <template>
   <article
     class="canvas-image"
-    :class="{ selected, missing }"
+    :class="{ selected, missing, transparent: image.showBackground === false }"
     :style="style"
     @mousedown.left="startDrag"
     @contextmenu.prevent.stop="emit('context', $event)"
@@ -137,6 +137,13 @@ function endResize() {
   user-select: none;
 }
 
+.canvas-image.transparent {
+  padding: 0;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .canvas-image.selected {
   outline: 2px solid rgba(59, 130, 246, 0.76);
   outline-offset: 3px;
@@ -149,6 +156,10 @@ function endResize() {
   object-fit: cover;
   border-radius: 2px;
   pointer-events: none;
+}
+
+.canvas-image.transparent img {
+  border-radius: 0;
 }
 
 .missing-state {

@@ -103,6 +103,8 @@ pub(crate) struct DrawingItem {
     pub(crate) z_index: i64,
     #[serde(default)]
     pub(crate) pinned: bool,
+    #[serde(default = "default_true")]
+    pub(crate) show_background: bool,
     pub(crate) created_at: String,
     pub(crate) updated_at: String,
 }
@@ -185,4 +187,8 @@ fn default_english_font_family() -> String {
 
 fn default_monospace_font_family() -> String {
     "Consolas, Cascadia Mono, monospace".to_string()
+}
+
+fn default_true() -> bool {
+    true
 }

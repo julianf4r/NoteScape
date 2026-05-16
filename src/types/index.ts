@@ -79,6 +79,7 @@ export interface CanvasImage {
   rotation: number;
   zIndex: number;
   pinned?: boolean;
+  showBackground?: boolean;
   createdAt: string;
   updatedAt: string;
 }

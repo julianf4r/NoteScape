@@ -964,6 +964,15 @@ function changeColorForContext(noteId: string, color: NoteColor) {
   contextMenu.value = null;
 }
 
+function toggleImageBackgroundForContext(imageId: string) {
+  const image = imageStore.images.find((item) => item.id === imageId);
+  if (!image) return;
+  captureCanvasHistory(() => {
+    imageStore.updateImage(imageId, { showBackground: image.showBackground === false });
+  });
+  contextMenu.value = null;
+}
+
 function pasteAtContext() {
   captureCanvasHistory(() => {
     const baseZ = globalMaxZ.value + 1;
@@ -1446,6 +1455,9 @@ watch(
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
         <button @click="bringObjectForContext('image', contextMenu!.imageId!); contextMenu = null">
           {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.pinned ? "取消置顶" : "置顶" }}
+        </button>
+        <button @click="toggleImageBackgroundForContext(contextMenu!.imageId!)">
+          {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.showBackground === false ? "显示背景" : "隐藏背景" }}
         </button>
         <button @click="deleteObjectForContext('image', contextMenu!.imageId!); contextMenu = null">删除</button>
       </template>

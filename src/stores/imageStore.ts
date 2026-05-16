@@ -71,6 +71,7 @@ export const useImageStore = defineStore("image", {
         rotation: patch.rotationEnabled === false ? 0 : randomRotation(),
         zIndex: patch.zIndex ?? this.maxZ + 1,
         pinned: false,
+        showBackground: true,
         createdAt: now(),
         updatedAt: now(),
       };
