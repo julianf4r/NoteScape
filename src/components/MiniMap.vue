@@ -85,8 +85,15 @@ function noteStyle(note: (typeof miniNotes.value)[number]) {
 }
 
 function imageStyle(image: (typeof miniImages.value)[number]) {
+  const width = Math.max(3, (image.maxX - image.minX) * mapScale.value * 0.85);
+  const height = Math.max(3, (image.maxY - image.minY) * mapScale.value * 0.85);
+  const left = offset.value.x + (image.minX - bounds.value.minX) * mapScale.value + ((image.maxX - image.minX) * mapScale.value - width) / 2;
+  const top = offset.value.y + (image.minY - bounds.value.minY) * mapScale.value + ((image.maxY - image.minY) * mapScale.value - height) / 2;
   return {
-    ...boxStyle(image),
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    height: `${height}px`,
     backgroundColor: "#94a3b8",
   };
 }
@@ -242,9 +249,15 @@ function clickMap(event: MouseEvent) {
   opacity: 0.72;
 }
 
+.mini-item.note,
 .mini-item.image {
-  opacity: 0.62;
-  outline: 1px solid rgba(51, 65, 85, 0.35);
+  border: 1px solid rgba(100, 116, 139, 0.45);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.38) inset;
+}
+
+.mini-item.image {
+  opacity: 0.46;
+  border-radius: 2px;
 }
 
 .mini-drawings {
