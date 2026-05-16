@@ -129,12 +129,22 @@ export interface ImportedImageFile {
   path: string;
 }
 
+export interface ClipboardImageData {
+  bytes: number[];
+  originalName: string;
+  mimeType: string;
+}
+
 export async function importImageFile(sourcePath: string, libraryPath: string): Promise<ImportedImageFile> {
   return invoke<ImportedImageFile>("import_image_file", { sourcePath, libraryPath });
 }
 
 export async function importImageBytes(bytes: number[], originalName: string, mimeType: string, libraryPath: string): Promise<ImportedImageFile> {
   return invoke<ImportedImageFile>("import_image_bytes", { bytes, originalName, mimeType, libraryPath });
+}
+
+export async function readClipboardImage(): Promise<ClipboardImageData> {
+  return invoke<ClipboardImageData>("read_clipboard_image");
 }
 
 export async function resolveImagePath(fileName: string, libraryPath: string): Promise<string | null> {

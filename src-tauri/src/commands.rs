@@ -1,6 +1,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use arboard::Clipboard;
+use image::{codecs::png::PngEncoder, ColorType, ImageEncoder};
 use rusqlite::{params, Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
 use tauri::AppHandle;
@@ -8,8 +10,8 @@ use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::db;
 use crate::models::{
-    AppSettings, CanvasImage, CanvasItem, DatabaseLoadResult, DrawingItem, ImportedImageFile,
-    StickyNote, TagItem,
+    AppSettings, CanvasImage, CanvasItem, ClipboardImageData, DatabaseLoadResult, DrawingItem,
+    ImportedImageFile, StickyNote, TagItem,
 };
 use crate::paths::{
     current_database_path, default_db_path, default_image_library_path, read_database_path,
@@ -333,6 +335,80 @@ pub(crate) fn resolve_image_path(
 #[tauri::command]
 pub(crate) fn default_image_library(app: AppHandle) -> Result<String, String> {
     Ok(default_image_library_path(&app)?.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub(crate) fn read_clipboard_image() -> Result<ClipboardImageData, String> {
+    let mut clipboard = Clipboard::new().map_err(|error| error.to_string())?;
+    if let Ok(image) = clipboard.get_image() {
+        return clipboard_bitmap_to_png(image);
+    }
+    let files = clipboard
+        .get()
+        .file_list()
+        .map_err(|_| "系统剪贴板中没有图片".to_string())?;
+    let path = files
+        .into_iter()
+        .find(|path| is_supported_image_path(path))
+        .ok_or_else(|| "系统剪贴板中没有图片".to_string())?;
+    let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+    if bytes.is_empty() {
+        return Err("图片内容为空".to_string());
+    }
+    Ok(ClipboardImageData {
+        bytes,
+        original_name: path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("clipboard-image")
+            .to_string(),
+        mime_type: mime_type_for_image_path(&path),
+    })
+}
+
+fn is_supported_image_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|value| value.to_str())
+        .map(|extension| {
+            matches!(
+                extension.to_ascii_lowercase().as_str(),
+                "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "svg"
+            )
+        })
+        .unwrap_or(false)
+}
+
+fn mime_type_for_image_path(path: &Path) -> String {
+    match path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("jpg") | Some("jpeg") => "image/jpeg".to_string(),
+        Some("webp") => "image/webp".to_string(),
+        Some("gif") => "image/gif".to_string(),
+        Some("bmp") => "image/bmp".to_string(),
+        Some("svg") => "image/svg+xml".to_string(),
+        _ => "image/png".to_string(),
+    }
+}
+
+fn clipboard_bitmap_to_png(image: arboard::ImageData<'_>) -> Result<ClipboardImageData, String> {
+    let mut bytes = Vec::new();
+    PngEncoder::new(&mut bytes)
+        .write_image(
+            image.bytes.as_ref(),
+            image.width as u32,
+            image.height as u32,
+            ColorType::Rgba8.into(),
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(ClipboardImageData {
+        bytes,
+        original_name: "clipboard-image.png".to_string(),
+        mime_type: "image/png".to_string(),
+    })
 }
 
 fn image_library_path(app: &AppHandle, library_path: &str) -> Result<PathBuf, String> {

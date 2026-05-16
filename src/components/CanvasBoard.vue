@@ -21,7 +21,7 @@ import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteCol
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 import { contentJsonToMarkdown } from "../utils/markdown";
-import { imageFileUrl, importImageBytes, importImageFile } from "../utils/storage";
+import { imageFileUrl, importImageBytes, importImageFile, readClipboardImage } from "../utils/storage";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -698,19 +698,6 @@ async function addImageFileAt(sourcePath: string, clientX?: number, clientY?: nu
   }
 }
 
-async function addImageBlobAt(blob: Blob, clientX?: number, clientY?: number, index = 0) {
-  if (!canvasStore.currentCanvasId || !board.value || !blob.type.startsWith("image/")) return false;
-  try {
-    const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
-    const imported = await importImageBytes(bytes, imageNameFromBlob(blob), blob.type, settingsStore.settings.imageLibraryPath);
-    await createImportedImage(imported, clientX, clientY, index);
-    return true;
-  } catch (error) {
-    feedback.notify(`粘贴图片失败：${error instanceof Error ? error.message : String(error)}`, "error");
-    return false;
-  }
-}
-
 async function createImportedImage(imported: Awaited<ReturnType<typeof importImageFile>>, clientX?: number, clientY?: number, index = 0) {
   if (!canvasStore.currentCanvasId || !board.value) return;
   const size = await measureImageSize(imageFileUrl(imported.path));
@@ -733,11 +720,6 @@ async function createImportedImage(imported: Awaited<ReturnType<typeof importIma
   });
   noteStore.clearSelection();
   drawingStore.clearSelection();
-}
-
-function imageNameFromBlob(blob: Blob) {
-  const extension = blob.type.split("/")[1]?.replace("jpeg", "jpg").replace("svg+xml", "svg") || "png";
-  return `clipboard-image.${extension}`;
 }
 
 function isImagePath(path: string) {
@@ -773,26 +755,24 @@ async function onNativeDrop(event: DragEvent) {
 
 async function onPaste(event: ClipboardEvent) {
   if (isTextInputTarget(event.target) || noteStore.editingId || !canvasStore.currentCanvasId) return;
-  const clipboard = event.clipboardData;
-  const imageFiles = Array.from(clipboard?.files ?? []).filter((file) => file.type.startsWith("image/"));
-  if (!imageFiles.length && clipboard?.items) {
-    imageFiles.push(
-      ...Array.from(clipboard.items)
-        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
-        .map((item) => item.getAsFile())
-        .filter((file): file is File => Boolean(file)),
-    );
-  }
-  if (imageFiles.length) {
-    event.preventDefault();
-    for (const [index, file] of imageFiles.entries()) {
-      await addImageBlobAt(file, undefined, undefined, index);
-    }
-    return;
-  }
   if (noteStore.clipboard.length || drawingStore.clipboard.length || imageStore.clipboard.length) {
     event.preventDefault();
     pasteAtCenter();
+  }
+}
+
+async function pasteImageFromSystemClipboardAtContext() {
+  if (!canvasStore.currentCanvasId) return;
+  const clientX = contextMenu.value?.x;
+  const clientY = contextMenu.value?.y;
+  try {
+    const image = await readClipboardImage();
+    const imported = await importImageBytes(image.bytes, image.originalName, image.mimeType, settingsStore.settings.imageLibraryPath);
+    await createImportedImage(imported, clientX, clientY);
+  } catch (error) {
+    feedback.notify(error instanceof Error ? error.message : String(error), "error");
+  } finally {
+    contextMenu.value = null;
   }
 }
 
@@ -1473,6 +1453,7 @@ watch(
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>
         <button @click="addImageAt(contextMenu!.x, contextMenu!.y); contextMenu = null">添加图片</button>
         <button :disabled="!noteStore.clipboard.length && !drawingStore.clipboard.length && !imageStore.clipboard.length" @click="pasteAtContext">粘贴</button>
+        <button @click="pasteImageFromSystemClipboardAtContext">从系统剪贴板粘贴图片</button>
         <button @click="fitView(); contextMenu = null">适应视图</button>
         <button @click="resetZoom(); contextMenu = null">重置缩放</button>
       </template>

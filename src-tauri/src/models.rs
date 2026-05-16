@@ -167,6 +167,14 @@ pub(crate) struct ImportedImageFile {
     pub(crate) path: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ClipboardImageData {
+    pub(crate) bytes: Vec<u8>,
+    pub(crate) original_name: String,
+    pub(crate) mime_type: String,
+}
+
 fn default_chinese_font_family() -> String {
     "Xiaolai, Microsoft YaHei".to_string()
 }
