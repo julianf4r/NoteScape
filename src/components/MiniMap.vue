@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { Maximize2, Minus, Plus } from "lucide-vue-next";
-import type { StickyNote, ViewportState } from "../types";
+import type { CanvasImage, DrawingItem, StickyNote, ViewportState } from "../types";
 import { noteColors } from "../utils/colors";
 
 const props = defineProps<{
   notes: StickyNote[];
+  drawings: DrawingItem[];
+  images: CanvasImage[];
   viewport: ViewportState;
   boardWidth: number;
   boardHeight: number;
@@ -23,13 +25,38 @@ const mapHeight = 122;
 const padding = 60;
 
 const bounds = computed(() => {
-  if (!props.notes.length) return { minX: -400, minY: -300, maxX: 800, maxY: 600, width: 1200, height: 900 };
-  const minX = Math.min(...props.notes.map((note) => note.x)) - padding;
-  const minY = Math.min(...props.notes.map((note) => note.y)) - padding;
-  const maxX = Math.max(...props.notes.map((note) => note.x + note.width)) + padding;
-  const maxY = Math.max(...props.notes.map((note) => note.y + note.height)) + padding;
+  const itemBounds = canvasItemBounds.value;
+  if (!itemBounds.length) return { minX: -400, minY: -300, maxX: 800, maxY: 600, width: 1200, height: 900 };
+  const minX = Math.min(...itemBounds.map((item) => item.minX)) - padding;
+  const minY = Math.min(...itemBounds.map((item) => item.minY)) - padding;
+  const maxX = Math.max(...itemBounds.map((item) => item.maxX)) + padding;
+  const maxY = Math.max(...itemBounds.map((item) => item.maxY)) + padding;
   return { minX, minY, maxX, maxY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 });
+
+const canvasItemBounds = computed(() => [
+  ...props.notes.map((note) => ({
+    id: note.id,
+    type: "note" as const,
+    color: note.color,
+    minX: note.x,
+    minY: note.y,
+    maxX: note.x + note.width,
+    maxY: note.y + note.height,
+  })),
+  ...props.drawings.flatMap((drawing) => {
+    const bounds = drawingBounds(drawing);
+    return bounds ? [{ id: drawing.id, type: "drawing" as const, color: drawing.color, ...bounds }] : [];
+  }),
+  ...props.images.map((image) => ({
+    id: image.id,
+    type: "image" as const,
+    minX: image.x,
+    minY: image.y,
+    maxX: image.x + image.width,
+    maxY: image.y + image.height,
+  })),
+]);
 
 const mapScale = computed(() => Math.min(mapWidth / bounds.value.width, mapHeight / bounds.value.height));
 const offset = computed(() => ({
@@ -37,14 +64,36 @@ const offset = computed(() => ({
   y: (mapHeight - bounds.value.height * mapScale.value) / 2,
 }));
 
-function noteStyle(note: StickyNote) {
+function itemStyle(item: (typeof canvasItemBounds.value)[number]) {
   return {
-    left: `${offset.value.x + (note.x - bounds.value.minX) * mapScale.value}px`,
-    top: `${offset.value.y + (note.y - bounds.value.minY) * mapScale.value}px`,
-    width: `${Math.max(4, note.width * mapScale.value)}px`,
-    height: `${Math.max(4, note.height * mapScale.value)}px`,
-    backgroundColor: noteColors[note.color],
+    left: `${offset.value.x + (item.minX - bounds.value.minX) * mapScale.value}px`,
+    top: `${offset.value.y + (item.minY - bounds.value.minY) * mapScale.value}px`,
+    width: `${Math.max(4, (item.maxX - item.minX) * mapScale.value)}px`,
+    height: `${Math.max(4, (item.maxY - item.minY) * mapScale.value)}px`,
+    backgroundColor: item.type === "note" ? noteColors[item.color] : item.type === "drawing" ? item.color : "#94a3b8",
   };
+}
+
+function drawingBounds(drawing: DrawingItem) {
+  if (drawing.type === "pen") {
+    const points = drawing.points ?? [];
+    if (!points.length) return null;
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+  }
+  if (drawing.type === "arrow" || drawing.type === "line") {
+    if (!drawing.start || !drawing.end) return null;
+    return {
+      minX: Math.min(drawing.start.x, drawing.end.x),
+      minY: Math.min(drawing.start.y, drawing.end.y),
+      maxX: Math.max(drawing.start.x, drawing.end.x),
+      maxY: Math.max(drawing.start.y, drawing.end.y),
+    };
+  }
+  const x = drawing.x ?? 0;
+  const y = drawing.y ?? 0;
+  return { minX: x, minY: y, maxX: x + (drawing.width ?? 0), maxY: y + (drawing.height ?? 0) };
 }
 
 const viewportStyle = computed(() => {
@@ -71,7 +120,7 @@ function clickMap(event: MouseEvent) {
 <template>
   <div class="minimap">
     <div class="map" @click="clickMap">
-      <div v-for="note in props.notes" :key="note.id" class="mini-note" :style="noteStyle(note)"></div>
+      <div v-for="item in canvasItemBounds" :key="`${item.type}-${item.id}`" class="mini-item" :class="item.type" :style="itemStyle(item)"></div>
       <div class="viewport" :style="viewportStyle"></div>
     </div>
     <div class="mini-controls">
@@ -106,10 +155,21 @@ function clickMap(event: MouseEvent) {
   cursor: var(--cursor-pointer);
 }
 
-.mini-note {
+.mini-item {
   position: absolute;
   border-radius: 1px;
   opacity: 0.72;
+}
+
+.mini-item.drawing {
+  min-width: 5px;
+  min-height: 3px;
+  border-radius: 999px;
+}
+
+.mini-item.image {
+  opacity: 0.62;
+  outline: 1px solid rgba(51, 65, 85, 0.35);
 }
 
 .viewport {

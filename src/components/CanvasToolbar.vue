@@ -9,7 +9,7 @@ const props = defineProps<{
   drawingTool: DrawingTool;
   drawingColor: string;
   drawingStrokeWidth: number;
-  drawingSelected: boolean;
+  objectSelected: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -23,7 +23,7 @@ const emit = defineEmits<{
   setDrawingTool: [tool: DrawingTool];
   setDrawingColor: [color: string];
   setDrawingStrokeWidth: [width: number];
-  deleteDrawing: [];
+  deleteSelected: [];
   addImage: [];
   settings: [];
 }>();
@@ -134,7 +134,7 @@ onBeforeUnmount(closeZoom);
         @change="emit('setDrawingStrokeWidth', Number(($event.target as HTMLInputElement).value))"
       />
     </div>
-    <button title="删除选中绘图" :disabled="!drawingSelected" @click="emit('deleteDrawing')"><Trash2 :size="18" /></button>
+    <button title="删除选中对象" :disabled="!objectSelected" @click="emit('deleteSelected')"><Trash2 :size="18" /></button>
     <button title="添加图片" @click="emit('addImage')"><ImagePlus :size="18" /></button>
     <span></span>
     <button title="缩小" @click="emit('zoomOut')"><Minus :size="18" /></button>

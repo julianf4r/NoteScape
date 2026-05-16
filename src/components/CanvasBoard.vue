@@ -70,14 +70,12 @@ type CanvasObjectRef =
   | { type: "image"; item: CanvasImageType };
 const canvasHistory = ref<CanvasHistoryBatch[]>([]);
 const canvasFuture = ref<CanvasHistoryBatch[]>([]);
-const pinnedZOffset = 100000;
-
 const globalMaxZ = computed(() =>
   Math.max(
     0,
-    ...noteStore.notes.map((note) => objectLayerZ({ type: "note", item: note })),
+    ...noteStore.notes.map((note) => note.zIndex),
     ...drawingStore.drawings.map((drawing) => drawing.zIndex),
-    ...imageStore.images.map((image) => objectLayerZ({ type: "image", item: image })),
+    ...imageStore.images.map((image) => image.zIndex),
   ),
 );
 
@@ -146,15 +144,16 @@ function resetZoom() {
 
 function fitView() {
   const rect = board.value?.getBoundingClientRect();
-  if (!rect || !visibleNotes.value.length) {
+  const bounds = visibleCanvasBounds();
+  if (!rect || !bounds.length) {
     resetZoom();
     return;
   }
   const padding = 140;
-  const minX = Math.min(...visibleNotes.value.map((note) => note.x));
-  const minY = Math.min(...visibleNotes.value.map((note) => note.y));
-  const maxX = Math.max(...visibleNotes.value.map((note) => note.x + note.width));
-  const maxY = Math.max(...visibleNotes.value.map((note) => note.y + note.height));
+  const minX = Math.min(...bounds.map((bound) => bound.minX));
+  const minY = Math.min(...bounds.map((bound) => bound.minY));
+  const maxX = Math.max(...bounds.map((bound) => bound.maxX));
+  const maxY = Math.max(...bounds.map((bound) => bound.maxY));
   const width = Math.max(1, maxX - minX);
   const height = Math.max(1, maxY - minY);
   viewport.scale = clamp(Math.min((rect.width - padding) / width, (rect.height - padding) / height), 0.25, 3);
@@ -432,8 +431,6 @@ function selectedObjectRefs() {
 }
 
 function objectLayerZ(ref: CanvasObjectRef) {
-  if (ref.type === "note") return (ref.item.pinned ? pinnedZOffset : 0) + ref.item.zIndex;
-  if (ref.type === "image") return (ref.item.pinned ? pinnedZOffset : 0) + ref.item.zIndex;
   return ref.item.zIndex;
 }
 
@@ -536,10 +533,6 @@ function deleteObjectForContext(type: CanvasObjectType, id: string) {
   });
 }
 
-function deleteSelectedDrawing() {
-  if (drawingStore.selectedIds.length) captureCanvasHistory(() => drawingStore.deleteSelected());
-}
-
 function deleteSelectedObjects() {
   captureCanvasHistory(() => {
     if (drawingStore.selectedIds.length) drawingStore.deleteSelected();
@@ -552,6 +545,17 @@ function clearObjectSelection() {
   noteStore.clearSelection();
   drawingStore.clearSelection();
   imageStore.clearSelection();
+}
+
+function clearObjectHistory() {
+  canvasHistory.value = [];
+  canvasFuture.value = [];
+  noteStore.history = [];
+  noteStore.future = [];
+  drawingStore.history = [];
+  drawingStore.future = [];
+  imageStore.history = [];
+  imageStore.future = [];
 }
 
 function startDrawingDrag(event: MouseEvent, drawingId: string) {
@@ -589,6 +593,8 @@ function startDrawingEdit(event: MouseEvent, drawingId: string, handle: "start" 
   if (!drawing) return;
   event.preventDefault();
   event.stopPropagation();
+  noteStore.clearSelection();
+  imageStore.clearSelection();
   drawingStore.select(drawingId);
   drawingEdit.value = {
     id: drawingId,
@@ -1062,6 +1068,26 @@ function drawingBounds(drawing: DrawingItem) {
   };
 }
 
+function visibleCanvasBounds() {
+  return [
+    ...visibleNotes.value.map((note) => ({
+      minX: note.x,
+      minY: note.y,
+      maxX: note.x + note.width,
+      maxY: note.y + note.height,
+    })),
+    ...currentCanvasDrawings.value
+      .map(drawingBounds)
+      .filter((bounds): bounds is { minX: number; minY: number; maxX: number; maxY: number } => Boolean(bounds)),
+    ...currentCanvasImages.value.map((image) => ({
+      minX: image.x,
+      minY: image.y,
+      maxX: image.x + image.width,
+      maxY: image.y + image.height,
+    })),
+  ];
+}
+
 function finishBoxSelect() {
   window.removeEventListener("mousemove", updateBoxSelect);
   if (!boxSelect.value) return;
@@ -1098,7 +1124,7 @@ function finishBoxSelect() {
   });
   noteStore.setSelection(selectedNotes.map((note) => note.id));
   drawingStore.setSelection(selectedDrawings.map((drawing) => drawing.id));
-  imageStore.selectedIds = selectedImages.map((image) => image.id);
+  imageStore.setSelection(selectedImages.map((image) => image.id));
   boxSelect.value = null;
 }
 
@@ -1128,6 +1154,8 @@ function centerNote(noteId: string) {
   if (!note || !rect) return;
   viewport.offsetX = rect.width / 2 - (note.x + note.width / 2) * viewport.scale;
   viewport.offsetY = rect.height / 2 - (note.y + note.height / 2) * viewport.scale;
+  drawingStore.clearSelection();
+  imageStore.clearSelection();
   noteStore.select(noteId);
   highlightedNoteId.value = noteId;
   window.clearTimeout(highlightTimer);
@@ -1238,6 +1266,9 @@ function saveViewport() {
 watch(
   () => canvasStore.currentCanvasId,
   () => {
+    clearObjectSelection();
+    contextMenu.value = null;
+    clearObjectHistory();
     const saved = canvasStore.currentCanvas?.viewport;
     viewport.offsetX = saved?.offsetX ?? 0;
     viewport.offsetY = saved?.offsetY ?? 0;
@@ -1305,7 +1336,7 @@ watch(
         @select="onImagePointerDown($event, image)"
         @update="(patch, track) => updateImage(image, patch, track)"
         @live="(patch) => imageStore.patchImageLive(image.id, patch)"
-        @delete="imageStore.deleteImage(image.id)"
+        @delete="deleteObjectForContext('image', image.id)"
         @context="(event) => openImageMenu(event, image.id)"
       />
       <StickyNote
@@ -1342,7 +1373,7 @@ watch(
       :drawing-tool="drawingStore.tool"
       :drawing-color="drawingStore.color"
       :drawing-stroke-width="drawingStore.strokeWidth"
-      :drawing-selected="Boolean(drawingStore.selectedIds.length)"
+      :object-selected="Boolean(selectedObjectCount())"
       @undo="undo"
       @redo="redo"
       @zoom-in="zoomBy(0.1)"
@@ -1353,7 +1384,7 @@ watch(
       @set-drawing-tool="drawingStore.setTool"
       @set-drawing-color="setDrawingColor"
       @set-drawing-stroke-width="setDrawingStrokeWidth"
-      @delete-drawing="deleteSelectedDrawing"
+      @delete-selected="deleteSelectedObjects"
       @add-image="addImageAt()"
       @settings="settingsStore.togglePanel()"
     />
@@ -1361,6 +1392,8 @@ watch(
     <MiniMap
       v-if="appStore.databaseReady"
       :notes="visibleNotes"
+      :drawings="currentCanvasDrawings"
+      :images="currentCanvasImages"
       :viewport="viewport"
       :board-width="boardSize.width"
       :board-height="boardSize.height"

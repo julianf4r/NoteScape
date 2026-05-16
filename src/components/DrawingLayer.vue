@@ -34,7 +34,6 @@ function editDrawing(event: MouseEvent, id: string, handle: "start" | "end" | "r
 function openDrawingMenu(event: MouseEvent, id: string) {
   event.preventDefault();
   event.stopPropagation();
-  if (!drawingStore.selectedIds.includes(id)) drawingStore.select(id);
   emit("contextDrawing", event, id);
 }
 

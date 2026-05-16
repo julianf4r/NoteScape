@@ -24,13 +24,12 @@ const drawingStore = useDrawingStore();
 const imageStore = useImageStore();
 
 const noteTags = computed(() => noteStore.notes.flatMap((note) => note.tags));
-const pinnedZOffset = 100000;
 const globalMaxZ = computed(() =>
   Math.max(
     0,
-    ...noteStore.notes.map((note) => (note.pinned ? pinnedZOffset : 0) + note.zIndex),
+    ...noteStore.notes.map((note) => note.zIndex),
     ...drawingStore.drawings.map((drawing) => drawing.zIndex),
-    ...imageStore.images.map((image) => (image.pinned ? pinnedZOffset : 0) + image.zIndex),
+    ...imageStore.images.map((image) => image.zIndex),
   ),
 );
 
