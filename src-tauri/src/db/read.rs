@@ -271,7 +271,7 @@ fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
     let mut statement = conn
         .prepare(
             "SELECT id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned,
-                    font_size, font_weight, text_align, decoration, created_at, updated_at
+                    previous_z_index, font_size, font_weight, text_align, decoration, created_at, updated_at
              FROM notes
              ORDER BY pinned ASC, z_index ASC",
         )
@@ -294,14 +294,15 @@ fn load_notes(conn: &Connection) -> Result<Vec<StickyNote>, String> {
                 rotation: row.get(10)?,
                 z_index: row.get(11)?,
                 pinned: row.get::<_, i64>(12)? != 0,
+                previous_z_index: row.get(13)?,
                 tags: Vec::new(),
-                font_size: row.get(13)?,
-                font_weight: row.get(14)?,
-                text_align: row.get(15)?,
-                decoration: row.get(16)?,
+                font_size: row.get(14)?,
+                font_weight: row.get(15)?,
+                text_align: row.get(16)?,
+                decoration: row.get(17)?,
                 checked_items: None,
-                created_at: row.get(17)?,
-                updated_at: row.get(18)?,
+                created_at: row.get(18)?,
+                updated_at: row.get(19)?,
             })
         })
         .map_err(|error| error.to_string())?;

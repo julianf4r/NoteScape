@@ -32,6 +32,7 @@ export interface DrawingItem {
   strokeWidth: number;
   zIndex: number;
   pinned?: boolean;
+  previousZIndex?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +57,7 @@ export interface StickyNote {
   rotation: number;
   zIndex: number;
   pinned?: boolean;
+  previousZIndex?: number;
   tags: string[];
   fontSize: number;
   fontWeight: "normal" | "medium" | "bold";
@@ -79,6 +81,7 @@ export interface CanvasImage {
   rotation: number;
   zIndex: number;
   pinned?: boolean;
+  previousZIndex?: number;
   showBackground?: boolean;
   createdAt: string;
   updatedAt: string;

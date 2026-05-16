@@ -156,6 +156,7 @@ export const useNoteStore = defineStore("note", {
         x: note.x + 28,
         y: note.y + 28,
         zIndex: zIndex ?? this.maxZForPinned(pinnedValue(note)) + 1,
+        previousZIndex: undefined,
         createdAt: now(),
         updatedAt: now(),
       };
@@ -174,6 +175,7 @@ export const useNoteStore = defineStore("note", {
         x: note.x + 28 + index * 8,
         y: note.y + 28 + index * 8,
         zIndex: baseZ === undefined ? this.maxZForPinned(pinnedValue(note)) + index + 1 : baseZ + index,
+        previousZIndex: undefined,
         createdAt: now(),
         updatedAt: now(),
       }));
@@ -195,12 +197,16 @@ export const useNoteStore = defineStore("note", {
       const targetPinned = !selected.every((note) => pinnedValue(note));
       selected.forEach((note, index) => {
         const before = { ...note };
+        const nextZIndex = targetPinned
+          ? this.maxZForPinned(true) + index + 1
+          : note.previousZIndex ?? this.maxZForPinned(false) + index + 1;
+        const previousZIndex = targetPinned ? note.previousZIndex ?? note.zIndex : undefined;
         note.pinned = targetPinned;
-        note.zIndex = this.maxZForPinned(targetPinned) + index + 1;
+        note.zIndex = nextZIndex;
+        note.previousZIndex = previousZIndex;
         note.updatedAt = now();
         if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
       });
-      this.normalizeZIndexes().forEach(saveNoteSafely);
       selected.forEach(saveNoteSafely);
     },
     updateSelected(patch: Partial<StickyNote>) {
@@ -230,11 +236,14 @@ export const useNoteStore = defineStore("note", {
       const note = this.notes.find((item) => item.id === id);
       if (!note) return;
       const before = { ...note };
-      note.pinned = !pinnedValue(note);
-      note.zIndex = this.maxZForPinned(note.pinned) + 1;
+      const targetPinned = !pinnedValue(note);
+      note.zIndex = targetPinned
+        ? this.maxZForPinned(true) + 1
+        : note.previousZIndex ?? this.maxZForPinned(false) + 1;
+      note.previousZIndex = targetPinned ? note.previousZIndex ?? before.zIndex : undefined;
+      note.pinned = targetPinned;
       note.updatedAt = now();
       if (hasMeaningfulChange(before, note)) this.addHistory({ type: "update", before, after: { ...note } });
-      this.normalizeZIndexes().forEach(saveNoteSafely);
       saveNoteSafely(note);
     },
     select(id: string, additive = false) {

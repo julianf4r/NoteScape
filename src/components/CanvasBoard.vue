@@ -952,14 +952,17 @@ function bringSelectedObjectsToFront() {
       : false;
     const baseZ = globalMaxZ.value + 1;
     refs.forEach((ref, index) => {
-      const zIndex = baseZ + index;
+      const zIndex = targetPinned
+        ? baseZ + index
+        : ref.item.previousZIndex ?? baseZ + index;
+      const previousZIndex = targetPinned ? ref.item.previousZIndex ?? ref.item.zIndex : undefined;
       if (ref.type === "note") {
-        noteStore.updateNote(ref.item.id, { zIndex, pinned: targetPinned });
+        noteStore.updateNote(ref.item.id, { zIndex, pinned: targetPinned, previousZIndex });
       } else if (ref.type === "image") {
-        imageStore.updateImage(ref.item.id, { zIndex, pinned: targetPinned });
+        imageStore.updateImage(ref.item.id, { zIndex, pinned: targetPinned, previousZIndex });
       } else {
         const before = cloneDrawing(ref.item);
-        drawingStore.updateDrawing(ref.item.id, { zIndex, pinned: targetPinned }, true);
+        drawingStore.updateDrawing(ref.item.id, { zIndex, pinned: targetPinned, previousZIndex }, true);
         const after = drawingStore.drawings.find((drawing) => drawing.id === ref.item.id);
         if (after) drawingStore.addHistory({ type: "update", before, after: cloneDrawing(after) });
       }

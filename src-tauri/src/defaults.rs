@@ -38,6 +38,7 @@ pub(crate) fn default_app_data() -> AppData {
             rotation: -1.5,
             z_index: 1,
             pinned: false,
+            previous_z_index: None,
             tags: Vec::new(),
             font_size: 18.0,
             font_weight: "normal".to_string(),

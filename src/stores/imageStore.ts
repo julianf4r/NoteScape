@@ -88,6 +88,7 @@ export const useImageStore = defineStore("image", {
         x,
         y,
         zIndex: zIndex ?? this.maxZ + index + 1,
+        previousZIndex: undefined,
         createdAt: now(),
         updatedAt: now(),
       };
@@ -165,8 +166,13 @@ export const useImageStore = defineStore("image", {
       const baseZ = this.maxZ;
       selected.forEach((image, index) => {
         const before = cloneImage(image);
+        const nextZIndex = targetPinned
+          ? baseZ + index + 1
+          : image.previousZIndex ?? baseZ + index + 1;
+        const previousZIndex = targetPinned ? image.previousZIndex ?? image.zIndex : undefined;
         image.pinned = targetPinned;
-        image.zIndex = baseZ + index + 1;
+        image.zIndex = nextZIndex;
+        image.previousZIndex = previousZIndex;
         image.updatedAt = now();
         if (hasMeaningfulChange(before, image)) this.addHistory({ type: "update", before, after: cloneImage(image) });
         saveImageSafely(image);
@@ -176,8 +182,10 @@ export const useImageStore = defineStore("image", {
       const image = this.images.find((item) => item.id === id);
       if (!image) return;
       const before = cloneImage(image);
-      image.pinned = !image.pinned;
-      image.zIndex = this.maxZ + 1;
+      const targetPinned = !image.pinned;
+      image.zIndex = targetPinned ? this.maxZ + 1 : image.previousZIndex ?? this.maxZ + 1;
+      image.previousZIndex = targetPinned ? image.previousZIndex ?? before.zIndex : undefined;
+      image.pinned = targetPinned;
       image.updatedAt = now();
       if (hasMeaningfulChange(before, image)) this.addHistory({ type: "update", before, after: cloneImage(image) });
       saveImageSafely(image);

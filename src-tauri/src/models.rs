@@ -59,6 +59,7 @@ pub(crate) struct StickyNote {
     pub(crate) z_index: i64,
     #[serde(default)]
     pub(crate) pinned: bool,
+    pub(crate) previous_z_index: Option<i64>,
     pub(crate) tags: Vec<String>,
     pub(crate) font_size: f64,
     pub(crate) font_weight: String,
@@ -103,6 +104,7 @@ pub(crate) struct DrawingItem {
     pub(crate) z_index: i64,
     #[serde(default)]
     pub(crate) pinned: bool,
+    pub(crate) previous_z_index: Option<i64>,
     pub(crate) created_at: String,
     pub(crate) updated_at: String,
 }
@@ -123,6 +125,7 @@ pub(crate) struct CanvasImage {
     pub(crate) z_index: i64,
     #[serde(default)]
     pub(crate) pinned: bool,
+    pub(crate) previous_z_index: Option<i64>,
     #[serde(default = "default_true")]
     pub(crate) show_background: bool,
     pub(crate) created_at: String,

@@ -145,6 +145,7 @@ export const useDrawingStore = defineStore("drawing", {
           ...moveDrawingFrom(drawing, 28 + index * 8, 28 + index * 8),
           id: nanoid(),
           zIndex: baseZ === undefined ? this.maxZ + index + 1 : baseZ + index,
+          previousZIndex: undefined,
           createdAt: now(),
           updatedAt: now(),
         }));
@@ -162,8 +163,13 @@ export const useDrawingStore = defineStore("drawing", {
       const baseZ = this.maxZ;
       selected.forEach((drawing, index) => {
         const before = cloneDrawing(drawing);
+        const nextZIndex = targetPinned
+          ? baseZ + index + 1
+          : drawing.previousZIndex ?? baseZ + index + 1;
+        const previousZIndex = targetPinned ? drawing.previousZIndex ?? drawing.zIndex : undefined;
         drawing.pinned = targetPinned;
-        drawing.zIndex = baseZ + index + 1;
+        drawing.zIndex = nextZIndex;
+        drawing.previousZIndex = previousZIndex;
         drawing.updatedAt = now();
         if (hasMeaningfulChange(before, drawing)) this.addHistory({ type: "update", before, after: cloneDrawing(drawing) });
         saveDrawingSafely(drawing);

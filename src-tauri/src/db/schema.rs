@@ -44,6 +44,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             rotation REAL NOT NULL,
             z_index INTEGER NOT NULL,
             pinned INTEGER NOT NULL DEFAULT 0,
+            previous_z_index INTEGER,
             font_size REAL NOT NULL,
             font_weight TEXT NOT NULL,
             text_align TEXT NOT NULL,
@@ -112,6 +113,7 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
     add_column_if_missing(conn, "notes", "content_json", "TEXT")?;
     add_column_if_missing(conn, "notes", "decoration", "TEXT")?;
     add_column_if_missing(conn, "notes", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
+    add_column_if_missing(conn, "notes", "previous_z_index", "INTEGER")?;
     add_column_if_missing(conn, "tags", "sort_order", "INTEGER NOT NULL DEFAULT 0")?;
     Ok(())
 }

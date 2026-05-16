@@ -125,9 +125,9 @@ pub(crate) fn save_structured_data(
     for note in &app_data.notes {
         tx.execute(
             "INSERT INTO notes (
-                id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned,
+                id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned, previous_z_index,
                 font_size, font_weight, text_align, decoration, created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)",
             params![
                 note.id,
                 note.canvas_id,
@@ -142,6 +142,7 @@ pub(crate) fn save_structured_data(
                 note.rotation,
                 note.z_index,
                 note.pinned as i64,
+                note.previous_z_index,
                 note.font_size,
                 note.font_weight,
                 note.text_align,
@@ -308,8 +309,8 @@ pub(crate) fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<()
     tx.execute(
         "INSERT INTO notes (
             id, canvas_id, title, content, content_json, x, y, width, height, color, rotation, z_index, pinned,
-            font_size, font_weight, text_align, decoration, created_at, updated_at
-        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)
+            previous_z_index, font_size, font_weight, text_align, decoration, created_at, updated_at
+        ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20)
         ON CONFLICT(id) DO UPDATE SET
             canvas_id = excluded.canvas_id,
             title = excluded.title,
@@ -323,6 +324,7 @@ pub(crate) fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<()
             rotation = excluded.rotation,
             z_index = excluded.z_index,
             pinned = excluded.pinned,
+            previous_z_index = excluded.previous_z_index,
             font_size = excluded.font_size,
             font_weight = excluded.font_weight,
             text_align = excluded.text_align,
@@ -342,6 +344,7 @@ pub(crate) fn upsert_note(conn: &mut Connection, note: &StickyNote) -> Result<()
             note.rotation,
             note.z_index,
             note.pinned as i64,
+            note.previous_z_index,
             note.font_size,
             note.font_weight,
             note.text_align,
