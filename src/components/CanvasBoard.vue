@@ -15,7 +15,7 @@ import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useDrawingStore } from "../stores/drawingStore";
 import { useImageStore } from "../stores/imageStore";
-import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteColor, NoteDecoration, StickyNote as StickyNoteType, ViewportState } from "../types";
+import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 import { contentJsonToMarkdown } from "../utils/markdown";
@@ -48,13 +48,6 @@ const drawingDrag = ref<{ id: string; startX: number; startY: number; before: Dr
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
 let highlightTimer: number | undefined;
 const minBoxSelectDistance = 4;
-const imageDecorations: Array<{ value: NoteDecoration; label: string }> = [
-  { value: "none", label: "无" },
-  { value: "tape", label: "胶带" },
-  { value: "double-tape", label: "双胶带" },
-  { value: "corner-tape", label: "角贴" },
-];
-
 const visibleNotes = computed(() =>
   noteStore.notesForCanvas(canvasStore.currentCanvasId, tagStore.activeTagId, canvasStore.searchQuery),
 );
@@ -564,6 +557,7 @@ async function addImageAt(clientX?: number, clientY?: number) {
     imageStore.createImage(canvasStore.currentCanvasId, {
       fileName: imported.fileName,
       originalName: imported.originalName,
+      contentHash: imported.contentHash,
       x: point.x - size.width / 2,
       y: point.y - size.height / 2,
       width: size.width,
@@ -707,11 +701,6 @@ function pasteAtContext() {
 function changeDrawingColorForContext(color: string) {
   drawingStore.color = color;
   if (drawingStore.selectedIds.length) drawingStore.updateSelected({ color });
-  contextMenu.value = null;
-}
-
-function changeImageDecorationForContext(decoration: NoteDecoration) {
-  if (contextMenu.value?.imageId) imageStore.updateImage(contextMenu.value.imageId, { decoration });
   contextMenu.value = null;
 }
 
@@ -1135,16 +1124,6 @@ watch(
       </template>
       <template v-else-if="contextMenu.imageId">
         <button @click="imageStore.deleteImage(contextMenu!.imageId!); contextMenu = null">删除</button>
-        <div class="context-section">
-          <span>装饰</span>
-          <button
-            v-for="option in imageDecorations"
-            :key="option.value"
-            @click="changeImageDecorationForContext(option.value)"
-          >
-            {{ option.label }}
-          </button>
-        </div>
       </template>
       <template v-else>
         <button @click="createNoteAt(contextMenu!.x, contextMenu!.y); contextMenu = null">新建便签</button>

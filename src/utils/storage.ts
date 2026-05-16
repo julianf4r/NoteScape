@@ -125,6 +125,7 @@ export async function deleteImagesByCanvasData(canvasId: string) {
 export interface ImportedImageFile {
   fileName: string;
   originalName: string;
+  contentHash: string;
   path: string;
 }
 

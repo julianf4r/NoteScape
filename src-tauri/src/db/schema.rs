@@ -73,6 +73,14 @@ pub(crate) fn init_schema(conn: &Connection) -> Result<(), String> {
             FOREIGN KEY(canvas_id) REFERENCES canvases(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS image_assets (
+            content_hash TEXT PRIMARY KEY,
+            file_name TEXT NOT NULL UNIQUE,
+            original_name TEXT NOT NULL,
+            ref_count INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS note_tags (
             note_id TEXT NOT NULL,
             tag_id TEXT NOT NULL,

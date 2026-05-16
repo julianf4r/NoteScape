@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { nanoid } from "nanoid";
-import type { CanvasImage, ImageHistoryEntry, NoteDecoration } from "../types";
+import type { CanvasImage, ImageHistoryEntry } from "../types";
 import { deleteImageData, deleteImagesByCanvasData, reportPersistenceError, saveImageData } from "../utils/storage";
 
 const now = () => new Date().toISOString();
@@ -49,11 +49,11 @@ export const useImageStore = defineStore("image", {
     createImage(canvasId: string, patch: {
       fileName: string;
       originalName?: string;
+      contentHash?: string;
       x: number;
       y: number;
       width: number;
       height: number;
-      decoration?: NoteDecoration;
       rotationEnabled?: boolean;
     }) {
       const image: CanvasImage = {
@@ -61,6 +61,7 @@ export const useImageStore = defineStore("image", {
         canvasId,
         fileName: patch.fileName,
         originalName: patch.originalName,
+        contentHash: patch.contentHash,
         x: patch.x,
         y: patch.y,
         width: patch.width,
@@ -68,7 +69,6 @@ export const useImageStore = defineStore("image", {
         rotation: patch.rotationEnabled === false ? 0 : randomRotation(),
         zIndex: this.maxZ + 1,
         pinned: false,
-        decoration: patch.decoration ?? "none",
         createdAt: now(),
         updatedAt: now(),
       };

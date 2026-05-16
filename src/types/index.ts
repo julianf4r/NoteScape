@@ -70,6 +70,7 @@ export interface CanvasImage {
   canvasId: string;
   fileName: string;
   originalName?: string;
+  contentHash?: string;
   x: number;
   y: number;
   width: number;
@@ -77,7 +78,6 @@ export interface CanvasImage {
   rotation: number;
   zIndex: number;
   pinned?: boolean;
-  decoration?: NoteDecoration;
   createdAt: string;
   updatedAt: string;
 }

@@ -112,6 +112,7 @@ pub(crate) struct CanvasImage {
     pub(crate) canvas_id: String,
     pub(crate) file_name: String,
     pub(crate) original_name: Option<String>,
+    pub(crate) content_hash: Option<String>,
     pub(crate) x: f64,
     pub(crate) y: f64,
     pub(crate) width: f64,
@@ -120,7 +121,6 @@ pub(crate) struct CanvasImage {
     pub(crate) z_index: i64,
     #[serde(default)]
     pub(crate) pinned: bool,
-    pub(crate) decoration: Option<String>,
     pub(crate) created_at: String,
     pub(crate) updated_at: String,
 }
@@ -161,6 +161,7 @@ pub(crate) struct AppSettings {
 pub(crate) struct ImportedImageFile {
     pub(crate) file_name: String,
     pub(crate) original_name: String,
+    pub(crate) content_hash: String,
     pub(crate) path: String,
 }
 

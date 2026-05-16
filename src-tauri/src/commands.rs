@@ -1,7 +1,10 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use rusqlite::{params, Connection, OptionalExtension};
+use sha2::{Digest, Sha256};
 use tauri::AppHandle;
+use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 
 use crate::db;
 use crate::models::{
@@ -116,21 +119,44 @@ pub(crate) fn save_image(app: AppHandle, image: String) -> Result<(), String> {
     let db_path = current_database_path(&app)?;
     let conn = db::open_database(&db_path)?;
     let image: CanvasImage = serde_json::from_str(&image).map_err(|error| error.to_string())?;
-    db::upsert_image(&conn, &image)
+    let previous = image_by_id(&conn, &image.id)?;
+    db::upsert_image(&conn, &image)?;
+    match previous {
+        Some(previous) if previous.file_name != image.file_name => {
+            let library = saved_image_library_path(&app, &conn)?;
+            release_image_asset(&conn, &library, &previous.file_name)?;
+            retain_image_asset(&conn, &image.file_name)?;
+        }
+        None => retain_image_asset(&conn, &image.file_name)?,
+        _ => {}
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn delete_image(app: AppHandle, id: String) -> Result<(), String> {
     let db_path = current_database_path(&app)?;
     let conn = db::open_database(&db_path)?;
-    db::delete_image(&conn, id)
+    let image = image_by_id(&conn, &id)?;
+    db::delete_image(&conn, id)?;
+    if let Some(image) = image {
+        let library = saved_image_library_path(&app, &conn)?;
+        release_image_asset(&conn, &library, &image.file_name)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub(crate) fn delete_images_by_canvas(app: AppHandle, canvas_id: String) -> Result<(), String> {
     let db_path = current_database_path(&app)?;
     let conn = db::open_database(&db_path)?;
-    db::delete_images_by_canvas(&conn, canvas_id)
+    let images = images_by_canvas_id(&conn, &canvas_id)?;
+    db::delete_images_by_canvas(&conn, canvas_id)?;
+    let library = saved_image_library_path(&app, &conn)?;
+    for image in images {
+        release_image_asset(&conn, &library, &image.file_name)?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -198,6 +224,9 @@ pub(crate) fn import_image_file(
     if !source.exists() {
         return Err("图片文件不存在".to_string());
     }
+    let db_path = current_database_path(&app)?;
+    let conn = db::open_database(&db_path)?;
+    let content_hash = file_hash(&source)?;
     let library = image_library_path(&app, &library_path)?;
     fs::create_dir_all(&library).map_err(|error| error.to_string())?;
     let original_name = source
@@ -205,6 +234,18 @@ pub(crate) fn import_image_file(
         .and_then(|name| name.to_str())
         .unwrap_or("image")
         .to_string();
+    if let Some((file_name, stored_original_name)) = image_asset_by_hash(&conn, &content_hash)? {
+        let target = library.join(&file_name);
+        if !target.exists() {
+            fs::copy(&source, &target).map_err(|error| error.to_string())?;
+        }
+        return Ok(ImportedImageFile {
+            file_name,
+            original_name: stored_original_name,
+            content_hash,
+            path: target.to_string_lossy().to_string(),
+        });
+    }
     let extension = source
         .extension()
         .and_then(|value| value.to_str())
@@ -213,9 +254,16 @@ pub(crate) fn import_image_file(
     let file_name = format!("{}{}", unique_file_stem(), extension);
     let target = library.join(&file_name);
     fs::copy(&source, &target).map_err(|error| error.to_string())?;
+    conn.execute(
+        "INSERT INTO image_assets (content_hash, file_name, original_name, ref_count, created_at)
+         VALUES (?1, ?2, ?3, 0, ?4)",
+        params![content_hash, file_name, original_name, now_iso()],
+    )
+    .map_err(|error| error.to_string())?;
     Ok(ImportedImageFile {
         file_name,
         original_name,
+        content_hash,
         path: target.to_string_lossy().to_string(),
     })
 }
@@ -241,6 +289,115 @@ fn image_library_path(app: &AppHandle, library_path: &str) -> Result<PathBuf, St
         return default_image_library_path(app);
     }
     Ok(PathBuf::from(library_path))
+}
+
+fn saved_image_library_path(app: &AppHandle, conn: &Connection) -> Result<PathBuf, String> {
+    let library_path = conn
+        .query_row(
+            "SELECT value FROM app_meta WHERE key = 'image_library_path'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .unwrap_or_default();
+    image_library_path(app, &library_path)
+}
+
+fn image_by_id(conn: &Connection, id: &str) -> Result<Option<CanvasImage>, String> {
+    conn.query_row("SELECT data FROM images WHERE id = ?1", params![id], |row| {
+        row.get::<_, String>(0)
+    })
+    .optional()
+    .map_err(|error| error.to_string())?
+    .map(|data| serde_json::from_str::<CanvasImage>(&data).map_err(|error| error.to_string()))
+    .transpose()
+}
+
+fn images_by_canvas_id(conn: &Connection, canvas_id: &str) -> Result<Vec<CanvasImage>, String> {
+    let mut statement = conn
+        .prepare("SELECT data FROM images WHERE canvas_id = ?1")
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map(params![canvas_id], |row| {
+            let data: String = row.get(0)?;
+            serde_json::from_str::<CanvasImage>(&data).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
+            })
+        })
+        .map_err(|error| error.to_string())?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| error.to_string())
+}
+
+fn image_asset_by_hash(
+    conn: &Connection,
+    content_hash: &str,
+) -> Result<Option<(String, String)>, String> {
+    conn.query_row(
+        "SELECT file_name, original_name FROM image_assets WHERE content_hash = ?1",
+        params![content_hash],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()
+    .map_err(|error| error.to_string())
+}
+
+fn retain_image_asset(conn: &Connection, file_name: &str) -> Result<(), String> {
+    conn.execute(
+        "UPDATE image_assets SET ref_count = ref_count + 1 WHERE file_name = ?1",
+        params![file_name],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn release_image_asset(conn: &Connection, library: &Path, file_name: &str) -> Result<(), String> {
+    let asset = conn
+        .query_row(
+            "SELECT content_hash, ref_count FROM image_assets WHERE file_name = ?1",
+            params![file_name],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?)),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?;
+    let Some((content_hash, ref_count)) = asset else {
+        return Ok(());
+    };
+    if ref_count > 1 {
+        conn.execute(
+            "UPDATE image_assets SET ref_count = ref_count - 1 WHERE content_hash = ?1",
+            params![content_hash],
+        )
+        .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
+    let target = library.join(file_name);
+    if target.exists() {
+        fs::remove_file(&target).map_err(|error| error.to_string())?;
+    }
+    conn.execute(
+        "DELETE FROM image_assets WHERE content_hash = ?1",
+        params![content_hash],
+    )
+    .map_err(|error| error.to_string())?;
+    Ok(())
+}
+
+fn file_hash(path: &Path) -> Result<String, String> {
+    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    let digest = Sha256::digest(bytes);
+    Ok(digest.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn now_iso() -> String {
+    OffsetDateTime::now_utc()
+        .format(&Rfc3339)
+        .unwrap_or_else(|_| unique_file_stem())
 }
 
 fn unique_file_stem() -> String {
