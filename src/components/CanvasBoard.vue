@@ -865,7 +865,7 @@ watch(
       <span>{{ appStore.loadError }}</span>
       <button @click.stop="settingsStore.togglePanel()">处理数据库</button>
     </div>
-    <div v-else-if="!canvasStore.currentCanvasId" class="empty-board">还没有画布<br />点击“新建”开始整理你的想法</div>
+    <div v-else-if="!canvasStore.currentCanvasId" class="empty-board">还没有画布<br />点击“+”开始整理你的想法</div>
     <div v-else-if="!visibleNotes.length && filterActive" class="empty-board filtered-empty">
       当前筛选下没有便签<br />
       <button @click.stop="clearFilters">清除筛选</button>

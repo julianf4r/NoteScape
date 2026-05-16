@@ -308,10 +308,10 @@ onUnmounted(() => {
         <section v-if="!hasSearchQuery" class="section">
         <div class="section-title">
           <span>画布</span>
-          <button class="new-button" :disabled="!appStore.databaseReady" @click="createCanvas"><Plus :size="15" />新建</button>
+          <button class="new-button" :disabled="!appStore.databaseReady" @click="createCanvas"><Plus :size="18" /></button>
         </div>
 
-        <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“新建”开始整理你的想法</div>
+        <div v-if="!filteredCanvases.length && !showTrash" class="empty">还没有画布<br />点击“+”开始整理你的想法</div>
 
         <div v-for="canvas in filteredCanvases" :key="canvas.id" class="canvas-row-wrap">
           <div
@@ -335,7 +335,8 @@ onUnmounted(() => {
               @blur="commitRename(canvas.id)"
             />
             <span v-else class="name">{{ canvas.name }}</span>
-            <span class="row-actions">
+            <span class="row-tail">
+              <b></b>
               <button title="更多" @mousedown.stop @click.stop="toggleCanvasMenu(canvas.id)"><Ellipsis :size="16" /></button>
             </span>
           </div>
@@ -350,7 +351,10 @@ onUnmounted(() => {
         <button class="canvas-row trash" :class="{ active: showTrash }" @click="showTrash = !showTrash">
           <Archive :size="16" />
           <span class="name">回收站</span>
-          <span class="time">{{ canvasStore.deletedCanvases.length || "" }}</span>
+          <span class="row-tail static">
+            <b>{{ canvasStore.deletedCanvases.length || "" }}</b>
+            <i></i>
+          </span>
         </button>
 
         <div v-if="showTrash" class="trash-panel">
@@ -400,7 +404,7 @@ onUnmounted(() => {
               @blur="commitTag(tag.id)"
             />
             <span v-else>{{ tag.name }}</span>
-            <span class="tag-meta">
+            <span class="row-tail">
               <b>{{ tag.count }}</b>
               <button title="更多" @mousedown.stop @click.stop="toggleTagMenu(tag.id)"><Ellipsis :size="16" /></button>
             </span>
@@ -586,7 +590,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 6px;
+  padding: 0 0 6px 6px;
   font-weight: 700;
   color: #1f2937;
 }
@@ -597,25 +601,29 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 34px;
-  padding: 0 10px;
-  color: #374151;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 7px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
+  font-weight: 600;
 }
 
-.small-add {
-  width: 34px;
-  padding: 0;
+.new-button:hover,
+.small-add:hover {
+  color: #334155;
+  background: #eef2f7;
+  border-color: #e2e8f0;
 }
 
 .new-button:disabled,
 .small-add:disabled {
   cursor: var(--cursor-not-allowed);
   color: #9ca3af;
-  background: #f3f4f6;
+  background: transparent;
 }
 
 .canvas-row,
@@ -672,20 +680,32 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.time,
-.tag-row b {
+.row-tail b {
   font-weight: 500;
   font-size: 13px;
   color: var(--text-muted);
 }
 
-.tag-meta {
-  display: inline-flex;
+.row-tail {
+  width: 56px;
+  display: grid;
+  grid-template-columns: 22px 26px;
   align-items: center;
+  justify-content: end;
   gap: 4px;
 }
 
-.tag-meta button {
+.row-tail b {
+  min-width: 0;
+  text-align: right;
+}
+
+.row-tail i {
+  width: 26px;
+  height: 26px;
+}
+
+.row-tail button {
   width: 26px;
   height: 26px;
   display: inline-flex;
@@ -694,11 +714,13 @@ onUnmounted(() => {
   color: #6b7280;
   background: transparent;
   border-radius: 6px;
+  opacity: 0.72;
 }
 
-.tag-meta button:hover {
+.row-tail button:hover {
   color: #1f2937;
   background: #fff;
+  opacity: 1;
 }
 
 .canvas-row input {
@@ -709,18 +731,6 @@ onUnmounted(() => {
   background: transparent;
 }
 
-.row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.canvas-row:hover .time,
-.tag-row:hover b {
-  display: inline;
-}
-
-.row-actions button,
 .trash-row button {
   width: 26px;
   height: 26px;
@@ -732,15 +742,9 @@ onUnmounted(() => {
   border-radius: 6px;
 }
 
-.row-actions button:hover,
 .trash-row button:hover {
   color: #1f2937;
   background: #fff;
-}
-
-.row-actions button:disabled {
-  cursor: var(--cursor-default);
-  opacity: 0.34;
 }
 
 .row-action-menu {
@@ -787,7 +791,7 @@ onUnmounted(() => {
 .trash {
   margin-top: 16px;
   border-top: 1px solid #edf0f3;
-  border-radius: 0;
+  border-radius: 7px;
 }
 
 .trash-panel {
