@@ -8,6 +8,7 @@ const props = defineProps<{
   drawings: DrawingItem[];
   scale: number;
   panMode: boolean;
+  fontFamily: string;
 }>();
 
 const emit = defineEmits<{
@@ -59,6 +60,15 @@ function drawingBounds(drawing: DrawingItem): DrawingBounds | null {
       minY: Math.min(drawing.start.y, drawing.end.y),
       maxX: Math.max(drawing.start.x, drawing.end.x),
       maxY: Math.max(drawing.start.y, drawing.end.y),
+    };
+  }
+  if (drawing.type === "text") {
+    const rect = textRectFor(drawing);
+    return {
+      minX: rect.x,
+      minY: rect.y,
+      maxX: rect.x + rect.width,
+      maxY: rect.y + rect.height,
     };
   }
   const x = drawing.x ?? 0;
@@ -292,8 +302,31 @@ function rectFor(drawing: DrawingItem) {
   };
 }
 
+function textLines(drawing: DrawingItem) {
+  return (drawing.text || "").split(/\r?\n/);
+}
+
+function textFontSize(drawing: DrawingItem) {
+  return drawing.fontSize ?? 18;
+}
+
+function textLineHeight(drawing: DrawingItem) {
+  return textFontSize(drawing) * 1.35;
+}
+
+function textRectFor(drawing: DrawingItem) {
+  const fontSize = textFontSize(drawing);
+  const lines = textLines(drawing);
+  return {
+    x: drawing.x ?? 0,
+    y: drawing.y ?? 0,
+    width: Math.max(drawing.width ?? 0, 24),
+    height: Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35),
+  };
+}
+
 function resizeHandlePoint(drawing: DrawingItem) {
-  const rect = rectFor(drawing);
+  const rect = drawing.type === "text" ? textRectFor(drawing) : rectFor(drawing);
   return {
     x: rect.x + rect.width,
     y: rect.y + rect.height,
@@ -433,6 +466,42 @@ function resizeHandlePoint(drawing: DrawingItem) {
         stroke-linejoin="round"
         @mousedown="selectDrawing($event, drawing.id)"
       />
+      <g
+        v-else-if="drawing.type === 'text'"
+        class="drawing-text"
+        @mousedown="selectDrawing($event, drawing.id)"
+      >
+        <rect
+          class="drawing-text-hit"
+          :x="textRectFor(drawing).x"
+          :y="textRectFor(drawing).y"
+          :width="textRectFor(drawing).width"
+          :height="textRectFor(drawing).height"
+        />
+        <rect
+          v-if="drawingStore.selectedIds.includes(drawing.id)"
+          class="drawing-text-bounds"
+          :x="textRectFor(drawing).x"
+          :y="textRectFor(drawing).y"
+          :width="textRectFor(drawing).width"
+          :height="textRectFor(drawing).height"
+        />
+        <text
+          class="drawing-text-content"
+          :x="textRectFor(drawing).x"
+          :y="textRectFor(drawing).y + textFontSize(drawing)"
+          :fill="drawing.color"
+          :font-size="textFontSize(drawing)"
+          :font-family="fontFamily"
+        >
+          <tspan
+            v-for="(line, index) in textLines(drawing)"
+            :key="index"
+            :x="textRectFor(drawing).x"
+            :dy="index === 0 ? 0 : textLineHeight(drawing)"
+          >{{ line || " " }}</tspan>
+        </text>
+      </g>
       <template v-if="drawingStore.selectedIds.includes(drawing.id) && (drawing.type === 'arrow' || drawing.type === 'line')">
         <g
           v-if="drawing.start"
@@ -452,7 +521,7 @@ function resizeHandlePoint(drawing: DrawingItem) {
         </g>
       </template>
       <g
-        v-if="drawingStore.selectedIds.includes(drawing.id) && (drawing.type === 'rect' || drawing.type === 'ellipse')"
+        v-if="drawingStore.selectedIds.includes(drawing.id) && (drawing.type === 'rect' || drawing.type === 'ellipse' || drawing.type === 'text')"
         class="edit-handle"
         @mousedown="editDrawing($event, drawing.id, 'resize')"
       >
@@ -479,6 +548,31 @@ function resizeHandlePoint(drawing: DrawingItem) {
 
 .drawing-layer :deep(.drawing-shape) {
   pointer-events: stroke;
+}
+
+.drawing-text {
+  cursor: var(--cursor-move);
+}
+
+.drawing-text-hit {
+  fill: transparent;
+  pointer-events: all;
+}
+
+.drawing-text-bounds {
+  fill: rgba(59, 130, 246, 0.04);
+  stroke: rgba(59, 130, 246, 0.78);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.drawing-text-content {
+  font-weight: 500;
+  white-space: pre;
+  pointer-events: none;
+  user-select: none;
 }
 
 .drawing-layer :deep(.selection-glow) {

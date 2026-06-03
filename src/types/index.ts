@@ -10,7 +10,7 @@ export type NoteColor =
 
 export type NoteDecoration = "none" | "pin" | "tape" | "double-tape" | "paperclip" | "corner-tape";
 
-export type DrawingTool = "select" | "pen" | "arrow" | "line" | "rect" | "ellipse";
+export type DrawingTool = "select" | "pen" | "arrow" | "line" | "rect" | "ellipse" | "text";
 
 export interface DrawingPoint {
   x: number;
@@ -28,6 +28,8 @@ export interface DrawingItem {
   y?: number;
   width?: number;
   height?: number;
+  text?: string;
+  fontSize?: number;
   color: string;
   strokeWidth: number;
   zIndex: number;

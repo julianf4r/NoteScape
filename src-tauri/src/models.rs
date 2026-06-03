@@ -99,6 +99,8 @@ pub(crate) struct DrawingItem {
     pub(crate) y: Option<f64>,
     pub(crate) width: Option<f64>,
     pub(crate) height: Option<f64>,
+    pub(crate) text: Option<String>,
+    pub(crate) font_size: Option<f64>,
     pub(crate) color: String,
     pub(crate) stroke_width: f64,
     pub(crate) z_index: i64,

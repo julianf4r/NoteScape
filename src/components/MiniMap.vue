@@ -142,6 +142,14 @@ function miniDrawingPath(drawing: DrawingItem) {
     const end = miniPoint(drawing.end);
     return `M ${start.x} ${start.y} L ${end.x} ${end.y}`;
   }
+  if (drawing.type === "text") {
+    const rect = textRect(drawing);
+    const x = (rect.x - bounds.value.minX) * mapScale.value;
+    const y = (rect.y - bounds.value.minY) * mapScale.value;
+    const width = rect.width * mapScale.value;
+    const height = rect.height * mapScale.value;
+    return `M ${x} ${y} L ${x + width} ${y} L ${x + width} ${y + height} L ${x} ${y + height} Z`;
+  }
   const x = ((drawing.x ?? 0) - bounds.value.minX) * mapScale.value;
   const y = ((drawing.y ?? 0) - bounds.value.minY) * mapScale.value;
   const width = (drawing.width ?? 0) * mapScale.value;
@@ -177,9 +185,24 @@ function drawingBounds(drawing: DrawingItem) {
       maxY: Math.max(drawing.start.y, drawing.end.y),
     };
   }
+  if (drawing.type === "text") {
+    const rect = textRect(drawing);
+    return { minX: rect.x, minY: rect.y, maxX: rect.x + rect.width, maxY: rect.y + rect.height };
+  }
   const x = drawing.x ?? 0;
   const y = drawing.y ?? 0;
   return { minX: x, minY: y, maxX: x + (drawing.width ?? 0), maxY: y + (drawing.height ?? 0) };
+}
+
+function textRect(drawing: DrawingItem) {
+  const fontSize = drawing.fontSize ?? 18;
+  const lines = (drawing.text || "").split(/\r?\n/);
+  return {
+    x: drawing.x ?? 0,
+    y: drawing.y ?? 0,
+    width: Math.max(drawing.width ?? 0, 24),
+    height: Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35),
+  };
 }
 
 const viewportStyle = computed(() => {

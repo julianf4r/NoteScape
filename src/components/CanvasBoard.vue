@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -48,6 +48,8 @@ const activeDrawingId = ref("");
 const clearSelectionAfterTinyDrawing = ref(false);
 const drawingDrag = ref<{ id: string; startX: number; startY: number; before: DrawingItem } | null>(null);
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
+const drawingTextInput = ref<{ x: number; y: number; width: number; height: number; text: string; fontSize: number } | null>(null);
+const drawingTextArea = ref<HTMLTextAreaElement>();
 const imageViewer = ref<{ image: CanvasImageType; url: string; scale: number; offsetX: number; offsetY: number } | null>(null);
 const imageViewerDrag = ref<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
 let highlightTimer: number | undefined;
@@ -66,6 +68,12 @@ const currentCanvasImages = computed(() => imageStore.imagesForCanvas(canvasStor
 const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.searchQuery.trim()));
 const activeTag = computed(() => tagStore.activeTag);
 const searchText = computed(() => canvasStore.searchQuery.trim());
+const noteFontFamily = computed(() => buildFontFamily(
+  settingsStore.settings.englishFontFamily,
+  settingsStore.settings.chineseFontFamily,
+  settingsStore.settings.monospaceFontFamily,
+  "cursive",
+));
 type CanvasObjectType = "note" | "drawing" | "image";
 type CanvasHistoryBatch = { notes: number; drawings: number; images: number };
 type CanvasObjectRef =
@@ -83,6 +91,24 @@ const globalMaxZ = computed(() =>
     ...imageStore.images.map((image) => image.zIndex),
   ),
 );
+
+function buildFontFamily(...groups: string[]) {
+  return groups.flatMap(parseFontList).join(", ");
+}
+
+function parseFontList(value: string) {
+  return value
+    .split(",")
+    .map((font) => font.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean)
+    .map(formatFontName);
+}
+
+function formatFontName(font: string) {
+  const genericFamilies = new Set(["serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui"]);
+  if (genericFamilies.has(font.toLowerCase())) return font;
+  return `"${font.replace(/"/g, '\\"')}"`;
+}
 
 const canvasClass = computed(() => ({
   "hide-grid": !settingsStore.settings.showGrid,
@@ -227,10 +253,14 @@ function onBoardMouseDown(event: MouseEvent) {
   const blankTarget = isCanvasBlankTarget(event.target);
   const shouldPan = event.button === 1 || handActive.value || spaceDown.value;
   if (drawingStore.tool !== "select") {
+    if (drawingTextInput.value && !(event.target as HTMLElement).closest(".drawing-text-input")) {
+      commitDrawingTextInput();
+    }
     if (!isCanvasControlTarget(event.target) && shouldPan) {
       startPan(event);
       return;
     }
+    if (drawingStore.tool === "text") return;
     if (!isCanvasControlTarget(event.target) && blankTarget && event.button === 0 && (event.shiftKey || event.ctrlKey)) {
       startBoxSelect(event);
       return;
@@ -263,6 +293,10 @@ function onBoardMouseDown(event: MouseEvent) {
 }
 
 function onBoardDoubleClick(event: MouseEvent) {
+  if (!handActive.value && drawingStore.tool === "text" && isCanvasBlankTarget(event.target)) {
+    startDrawingTextInput(event);
+    return;
+  }
   if (handActive.value || drawingStore.tool !== "select") return;
   if (isCanvasBlankTarget(event.target)) createNoteAt(event.clientX, event.clientY);
 }
@@ -275,6 +309,7 @@ function drawingPointFromEvent(event: MouseEvent): DrawingPoint | null {
 
 function startDrawing(event: MouseEvent) {
   if (!canvasStore.currentCanvasId || event.button !== 0) return;
+  if (drawingStore.tool === "text") return;
   const point = drawingPointFromEvent(event);
   if (!point) return;
   event.preventDefault();
@@ -329,7 +364,62 @@ function finishDrawing() {
 function isMeaningfulDrawing(drawing: DrawingItem) {
   if (drawing.type === "pen") return (drawing.points?.length ?? 0) > 1;
   if (drawing.type === "arrow" || drawing.type === "line") return Boolean(drawing.start && drawing.end && Math.hypot(drawing.end.x - drawing.start.x, drawing.end.y - drawing.start.y) > 4);
+  if (drawing.type === "text") return Boolean(drawing.text?.trim());
   return Math.max(drawing.width ?? 0, drawing.height ?? 0) > 4;
+}
+
+function startDrawingTextInput(event: MouseEvent) {
+  if (!canvasStore.currentCanvasId || !board.value) return;
+  event.preventDefault();
+  event.stopPropagation();
+  commitDrawingTextInput();
+  clearObjectSelection();
+  const rect = board.value.getBoundingClientRect();
+  const point = screenToWorld(event.clientX, event.clientY, viewport, rect);
+  drawingTextInput.value = {
+    x: point.x,
+    y: point.y,
+    width: 240,
+    height: Math.max(44, settingsStore.settings.defaultFontSize * 2.4),
+    text: "",
+    fontSize: settingsStore.settings.defaultFontSize,
+  };
+  void nextTick(() => {
+    drawingTextArea.value?.focus();
+    resizeDrawingTextInput();
+  });
+}
+
+function resizeDrawingTextInput() {
+  const input = drawingTextInput.value;
+  const element = drawingTextArea.value;
+  if (!input || !element) return;
+  element.style.height = "auto";
+  input.height = Math.min(520, Math.max(44, element.scrollHeight + 2));
+}
+
+function commitDrawingTextInput() {
+  const input = drawingTextInput.value;
+  if (!input || !canvasStore.currentCanvasId) {
+    drawingTextInput.value = null;
+    return;
+  }
+  const text = input.text.trimEnd();
+  drawingTextInput.value = null;
+  if (!text.trim()) return;
+  captureCanvasHistory(() => {
+    const drawing = drawingStore.createDrawing(canvasStore.currentCanvasId, {
+      type: "text",
+      x: input.x,
+      y: input.y,
+      width: input.width,
+      height: input.height,
+      text,
+      fontSize: input.fontSize,
+      zIndex: globalMaxZ.value + 1,
+    });
+    drawingStore.finishDrawing(drawing.id);
+  });
 }
 
 function setHandActive(value: boolean) {
@@ -637,6 +727,20 @@ function editDrawing(event: MouseEvent) {
     drawingStore.updateDrawing(id, {
       width: Math.max(8, point.x - x),
       height: Math.max(8, point.y - y),
+    });
+  }
+  if (before.type === "text" && handle === "resize") {
+    const x = before.x ?? 0;
+    const y = before.y ?? 0;
+    const width = Math.max(40, point.x - x);
+    const height = Math.max(24, point.y - y);
+    const widthRatio = width / Math.max(1, before.width ?? width);
+    const heightRatio = height / Math.max(1, before.height ?? height);
+    const scale = Math.max(widthRatio, heightRatio);
+    drawingStore.updateDrawing(id, {
+      width,
+      height,
+      fontSize: Math.min(96, Math.max(8, Math.round((before.fontSize ?? settingsStore.settings.defaultFontSize) * scale))),
     });
   }
 }
@@ -1091,6 +1195,18 @@ function drawingBounds(drawing: DrawingItem) {
       maxY: Math.max(drawing.start.y, drawing.end.y),
     };
   }
+  if (drawing.type === "text") {
+    const fontSize = drawing.fontSize ?? settingsStore.settings.defaultFontSize;
+    const lines = (drawing.text || "").split(/\r?\n/);
+    const x = drawing.x ?? 0;
+    const y = drawing.y ?? 0;
+    return {
+      minX: x,
+      minY: y,
+      maxX: x + Math.max(drawing.width ?? 0, 24),
+      maxY: y + Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35),
+    };
+  }
   const x = drawing.x ?? 0;
   const y = drawing.y ?? 0;
   const width = drawing.width ?? 0;
@@ -1368,11 +1484,34 @@ watch(
         :drawings="[drawing]"
         :scale="viewport.scale"
         :pan-mode="handActive || spaceDown"
+        :font-family="noteFontFamily"
         :style="drawingLayerStyle(drawing)"
         @drag-drawing="startDrawingDrag"
         @edit-drawing="startDrawingEdit"
         @context-drawing="openDrawingMenu"
       />
+      <textarea
+        v-if="drawingTextInput"
+        ref="drawingTextArea"
+        v-model="drawingTextInput.text"
+        class="drawing-text-input"
+        wrap="off"
+        :style="{
+          left: `${drawingTextInput.x}px`,
+          top: `${drawingTextInput.y}px`,
+          width: `${drawingTextInput.width}px`,
+          height: `${drawingTextInput.height}px`,
+          color: drawingStore.color,
+          fontSize: `${drawingTextInput.fontSize}px`,
+          fontFamily: noteFontFamily,
+        }"
+        @input="resizeDrawingTextInput"
+        @mousedown.stop
+        @dblclick.stop
+        @keydown.stop
+        @keydown.esc.prevent.stop="commitDrawingTextInput"
+        @blur="commitDrawingTextInput"
+      ></textarea>
       <CanvasImage
         v-for="image in currentCanvasImages"
         :key="image.id"
@@ -1574,6 +1713,24 @@ watch(
   width: 2800px;
   height: 2200px;
   transform-origin: 0 0;
+}
+
+.drawing-text-input {
+  position: absolute;
+  z-index: 200000;
+  min-width: 120px;
+  min-height: 44px;
+  padding: 6px 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(59, 130, 246, 0.55);
+  border-radius: 4px;
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+  line-height: 1.35;
+  resize: none;
+  white-space: pre;
+  cursor: var(--cursor-text);
 }
 
 .empty-board {

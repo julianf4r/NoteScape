@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { ArrowUpRight, ChevronDown, Circle, Hand, ImagePlus, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, Trash2 } from "lucide-vue-next";
+import { ArrowUpRight, ChevronDown, Circle, Hand, ImagePlus, Minus, MousePointer2, Pencil, Plus, RotateCcw, RotateCw, SlidersHorizontal, Square, Trash2, Type } from "lucide-vue-next";
 import type { DrawingTool } from "../types";
 
 const props = defineProps<{
@@ -40,6 +40,7 @@ const drawingTools: Array<{ tool: DrawingTool; title: string; icon: typeof Mouse
   { tool: "line", title: "直线", icon: Minus },
   { tool: "rect", title: "矩形", icon: Square },
   { tool: "ellipse", title: "椭圆", icon: Circle },
+  { tool: "text", title: "文本", icon: Type },
 ];
 
 watch(
