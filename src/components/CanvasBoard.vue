@@ -50,6 +50,7 @@ const drawingDrag = ref<{ id: string; startX: number; startY: number; before: Dr
 const drawingEdit = ref<{ id: string; handle: "start" | "end" | "resize"; before: DrawingItem } | null>(null);
 const drawingTextInput = ref<{ x: number; y: number; width: number; height: number; text: string; fontSize: number } | null>(null);
 const drawingTextArea = ref<HTMLTextAreaElement>();
+const drawingTextMeasure = ref<HTMLElement>();
 const imageViewer = ref<{ image: CanvasImageType; url: string; scale: number; offsetX: number; offsetY: number } | null>(null);
 const imageViewerDrag = ref<{ startX: number; startY: number; offsetX: number; offsetY: number } | null>(null);
 let highlightTimer: number | undefined;
@@ -379,10 +380,10 @@ function startDrawingTextInput(event: MouseEvent) {
   drawingTextInput.value = {
     x: point.x,
     y: point.y,
-    width: 240,
-    height: Math.max(44, settingsStore.settings.defaultFontSize * 2.4),
+    width: 16,
+    height: Math.max(24, drawingStore.textFontSize * 1.35),
     text: "",
-    fontSize: settingsStore.settings.defaultFontSize,
+    fontSize: drawingStore.textFontSize,
   };
   void nextTick(() => {
     drawingTextArea.value?.focus();
@@ -392,10 +393,20 @@ function startDrawingTextInput(event: MouseEvent) {
 
 function resizeDrawingTextInput() {
   const input = drawingTextInput.value;
-  const element = drawingTextArea.value;
-  if (!input || !element) return;
-  element.style.height = "auto";
-  input.height = Math.min(520, Math.max(44, element.scrollHeight + 2));
+  const measure = drawingTextMeasure.value;
+  if (!input || !measure) return;
+  input.text = drawingTextArea.value?.value ?? input.text;
+  measure.textContent = measurableDrawingText(input.text);
+  const lineHeight = input.fontSize * 1.35;
+  const lineCount = Math.max(1, input.text.replace(/\r\n/g, "\n").split("\n").length);
+  input.width = Math.min(900, Math.max(16, Math.ceil(measure.scrollWidth)));
+  input.height = Math.min(520, Math.max(Math.ceil(lineHeight), Math.ceil(lineCount * lineHeight)));
+  if (drawingTextArea.value) drawingTextArea.value.scrollTop = 0;
+}
+
+function measurableDrawingText(text: string) {
+  if (!text) return " ";
+  return text.endsWith("\n") ? `${text} ` : text;
 }
 
 function commitDrawingTextInput() {
@@ -416,6 +427,7 @@ function commitDrawingTextInput() {
       height: input.height,
       text,
       fontSize: input.fontSize,
+      scale: 1,
       zIndex: globalMaxZ.value + 1,
     });
     drawingStore.finishDrawing(drawing.id);
@@ -732,15 +744,13 @@ function editDrawing(event: MouseEvent) {
   if (before.type === "text" && handle === "resize") {
     const x = before.x ?? 0;
     const y = before.y ?? 0;
-    const width = Math.max(40, point.x - x);
-    const height = Math.max(24, point.y - y);
-    const widthRatio = width / Math.max(1, before.width ?? width);
-    const heightRatio = height / Math.max(1, before.height ?? height);
+    const baseWidth = Math.max(1, before.width ?? 1);
+    const baseHeight = Math.max(1, before.height ?? 1);
+    const widthRatio = Math.max(0.1, (point.x - x) / baseWidth);
+    const heightRatio = Math.max(0.1, (point.y - y) / baseHeight);
     const scale = Math.max(widthRatio, heightRatio);
     drawingStore.updateDrawing(id, {
-      width,
-      height,
-      fontSize: Math.min(96, Math.max(8, Math.round((before.fontSize ?? settingsStore.settings.defaultFontSize) * scale))),
+      scale: Math.min(20, Math.max(0.1, scale)),
     });
   }
 }
@@ -1153,6 +1163,10 @@ function setDrawingStrokeWidth(width: number) {
   if (drawingStore.selectedIds.length) captureCanvasHistory(() => drawingStore.updateSelected({ strokeWidth }));
 }
 
+function setDrawingTextFontSize(size: number) {
+  drawingStore.textFontSize = Math.min(96, Math.max(12, size || 36));
+}
+
 function startBoxSelect(event: MouseEvent) {
   if (!board.value) return;
   const rect = board.value.getBoundingClientRect();
@@ -1200,11 +1214,12 @@ function drawingBounds(drawing: DrawingItem) {
     const lines = (drawing.text || "").split(/\r?\n/);
     const x = drawing.x ?? 0;
     const y = drawing.y ?? 0;
+    const scale = drawing.scale ?? 1;
     return {
       minX: x,
       minY: y,
-      maxX: x + Math.max(drawing.width ?? 0, 24),
-      maxY: y + Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35),
+      maxX: x + Math.max(drawing.width ?? 0, 24) * scale,
+      maxY: y + Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35) * scale,
     };
   }
   const x = drawing.x ?? 0;
@@ -1506,12 +1521,23 @@ watch(
           fontFamily: noteFontFamily,
         }"
         @input="resizeDrawingTextInput"
+        @compositionupdate="resizeDrawingTextInput"
+        @compositionend="resizeDrawingTextInput"
         @mousedown.stop
         @dblclick.stop
         @keydown.stop
         @keydown.esc.prevent.stop="commitDrawingTextInput"
         @blur="commitDrawingTextInput"
       ></textarea>
+      <div
+        v-if="drawingTextInput"
+        ref="drawingTextMeasure"
+        class="drawing-text-measure"
+        :style="{
+          fontSize: `${drawingTextInput.fontSize}px`,
+          fontFamily: noteFontFamily,
+        }"
+      ></div>
       <CanvasImage
         v-for="image in currentCanvasImages"
         :key="image.id"
@@ -1580,6 +1606,7 @@ watch(
       :drawing-tool="drawingStore.tool"
       :drawing-color="drawingStore.color"
       :drawing-stroke-width="drawingStore.strokeWidth"
+      :drawing-text-font-size="drawingStore.textFontSize"
       :object-selected="Boolean(selectedObjectCount())"
       @undo="undo"
       @redo="redo"
@@ -1591,6 +1618,7 @@ watch(
       @set-drawing-tool="drawingStore.setTool"
       @set-drawing-color="setDrawingColor"
       @set-drawing-stroke-width="setDrawingStrokeWidth"
+      @set-drawing-text-font-size="setDrawingTextFontSize"
       @delete-selected="deleteSelectedObjects"
       @add-image="addImageAt()"
       @settings="settingsStore.togglePanel()"
@@ -1718,19 +1746,34 @@ watch(
 .drawing-text-input {
   position: absolute;
   z-index: 200000;
-  min-width: 120px;
-  min-height: 44px;
-  padding: 6px 8px;
+  min-width: 16px;
+  min-height: 24px;
+  padding: 0;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.72);
+  background: transparent;
   border: 1px solid rgba(59, 130, 246, 0.55);
   border-radius: 4px;
   outline: 0;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+  font-weight: 500;
   line-height: 1.35;
   resize: none;
   white-space: pre;
   cursor: var(--cursor-text);
+}
+
+.drawing-text-measure {
+  position: absolute;
+  left: -10000px;
+  top: -10000px;
+  min-width: 16px;
+  min-height: 24px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow: visible;
+  white-space: pre;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .empty-board {

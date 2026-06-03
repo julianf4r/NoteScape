@@ -197,11 +197,12 @@ function drawingBounds(drawing: DrawingItem) {
 function textRect(drawing: DrawingItem) {
   const fontSize = drawing.fontSize ?? 18;
   const lines = (drawing.text || "").split(/\r?\n/);
+  const scale = drawing.scale ?? 1;
   return {
     x: drawing.x ?? 0,
     y: drawing.y ?? 0,
-    width: Math.max(drawing.width ?? 0, 24),
-    height: Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35),
+    width: Math.max(drawing.width ?? 0, 24) * scale,
+    height: Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35) * scale,
   };
 }
 

@@ -30,6 +30,7 @@ export interface DrawingItem {
   height?: number;
   text?: string;
   fontSize?: number;
+  scale?: number;
   color: string;
   strokeWidth: number;
   zIndex: number;

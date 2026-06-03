@@ -101,6 +101,7 @@ pub(crate) struct DrawingItem {
     pub(crate) height: Option<f64>,
     pub(crate) text: Option<String>,
     pub(crate) font_size: Option<f64>,
+    pub(crate) scale: Option<f64>,
     pub(crate) color: String,
     pub(crate) stroke_width: f64,
     pub(crate) z_index: i64,

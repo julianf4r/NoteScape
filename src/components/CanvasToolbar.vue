@@ -9,6 +9,7 @@ const props = defineProps<{
   drawingTool: DrawingTool;
   drawingColor: string;
   drawingStrokeWidth: number;
+  drawingTextFontSize: number;
   objectSelected: boolean;
 }>();
 
@@ -23,6 +24,7 @@ const emit = defineEmits<{
   setDrawingTool: [tool: DrawingTool];
   setDrawingColor: [color: string];
   setDrawingStrokeWidth: [width: number];
+  setDrawingTextFontSize: [size: number];
   deleteSelected: [];
   addImage: [];
   settings: [];
@@ -126,6 +128,17 @@ onBeforeUnmount(closeZoom);
         <input type="color" :value="drawingColor" @input="emit('setDrawingColor', ($event.target as HTMLInputElement).value)" />
       </label>
       <input
+        v-if="drawingTool === 'text'"
+        class="stroke-input"
+        title="文本字号"
+        type="number"
+        min="12"
+        max="96"
+        :value="drawingTextFontSize"
+        @change="emit('setDrawingTextFontSize', Number(($event.target as HTMLInputElement).value))"
+      />
+      <input
+        v-else
         class="stroke-input"
         title="线宽"
         type="number"

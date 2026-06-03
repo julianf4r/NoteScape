@@ -314,7 +314,11 @@ function textLineHeight(drawing: DrawingItem) {
   return textFontSize(drawing) * 1.35;
 }
 
-function textRectFor(drawing: DrawingItem) {
+function textScale(drawing: DrawingItem) {
+  return drawing.scale ?? 1;
+}
+
+function textBaseRectFor(drawing: DrawingItem) {
   const fontSize = textFontSize(drawing);
   const lines = textLines(drawing);
   return {
@@ -322,6 +326,17 @@ function textRectFor(drawing: DrawingItem) {
     y: drawing.y ?? 0,
     width: Math.max(drawing.width ?? 0, 24),
     height: Math.max(drawing.height ?? 0, Math.max(1, lines.length) * fontSize * 1.35),
+  };
+}
+
+function textRectFor(drawing: DrawingItem) {
+  const rect = textBaseRectFor(drawing);
+  const scale = textScale(drawing);
+  return {
+    x: rect.x,
+    y: rect.y,
+    width: rect.width * scale,
+    height: rect.height * scale,
   };
 }
 
@@ -488,8 +503,9 @@ function resizeHandlePoint(drawing: DrawingItem) {
         />
         <text
           class="drawing-text-content"
-          :x="textRectFor(drawing).x"
-          :y="textRectFor(drawing).y + textFontSize(drawing)"
+          :transform="`translate(${textBaseRectFor(drawing).x}, ${textBaseRectFor(drawing).y}) scale(${textScale(drawing)})`"
+          :x="0"
+          :y="textFontSize(drawing)"
           :fill="drawing.color"
           :font-size="textFontSize(drawing)"
           :font-family="fontFamily"
@@ -497,7 +513,7 @@ function resizeHandlePoint(drawing: DrawingItem) {
           <tspan
             v-for="(line, index) in textLines(drawing)"
             :key="index"
-            :x="textRectFor(drawing).x"
+            :x="0"
             :dy="index === 0 ? 0 : textLineHeight(drawing)"
           >{{ line || " " }}</tspan>
         </text>
