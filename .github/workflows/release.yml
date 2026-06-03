@@ -85,7 +85,7 @@ jobs:
           }
 
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             release-artifacts/NoteScape-${{ github.ref_name }}-${{ matrix.archive_suffix }}.7z
