@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
 import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Minus, Paperclip, Pin, Plus, Sparkles, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
-import { EditorContent, type JSONContent, useEditor } from "@tiptap/vue-3";
+import { Editor, EditorContent, type JSONContent } from "@tiptap/vue-3";
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -46,6 +46,8 @@ const emit = defineEmits<{
 const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
 const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
+const editor = shallowRef<Editor | null>(null);
+const skipNextEditingCommit = ref(false);
 const showTags = ref(false);
 const showDecorations = ref(false);
 const heightLimited = ref(false);
@@ -73,6 +75,66 @@ function textToDoc(text: string): JSONContent {
   };
 }
 
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function attrsToString(attrs: Record<string, string | number | boolean | null | undefined>) {
+  return Object.entries(attrs)
+    .filter(([, value]) => value !== undefined && value !== null && value !== false)
+    .map(([key, value]) => ` ${key}="${escapeHtml(String(value === true ? key : value))}"`)
+    .join("");
+}
+
+function renderTextNode(node: JSONContent) {
+  let html = escapeHtml(node.text ?? "");
+  for (const mark of node.marks ?? []) {
+    if (mark.type === "bold") html = `<strong>${html}</strong>`;
+    else if (mark.type === "strike") html = `<s>${html}</s>`;
+    else if (mark.type === "code") html = `<code>${html}</code>`;
+    else if (mark.type === "link") {
+      const href = typeof mark.attrs?.href === "string" ? mark.attrs.href : "";
+      html = href ? `<a href="${escapeHtml(href)}">${html}</a>` : html;
+    }
+  }
+  return html;
+}
+
+function renderInlineContent(content?: JSONContent[]) {
+  return content?.map(renderStaticNode).join("") ?? "";
+}
+
+function textAlignAttr(node: JSONContent) {
+  const textAlign = typeof node.attrs?.textAlign === "string" ? node.attrs.textAlign : "";
+  return textAlign ? attrsToString({ style: `text-align: ${textAlign}` }) : "";
+}
+
+function renderStaticNode(node: JSONContent): string {
+  if (node.type === "text") return renderTextNode(node);
+  if (node.type === "paragraph") return `<p${textAlignAttr(node)}>${renderInlineContent(node.content) || "<br>"}</p>`;
+  if (node.type === "heading") {
+    const level = Math.min(6, Math.max(1, Number(node.attrs?.level) || 1));
+    return `<h${level}${textAlignAttr(node)}>${renderInlineContent(node.content)}</h${level}>`;
+  }
+  if (node.type === "bulletList") return `<ul>${renderInlineContent(node.content)}</ul>`;
+  if (node.type === "orderedList") return `<ol>${renderInlineContent(node.content)}</ol>`;
+  if (node.type === "listItem") return `<li>${renderInlineContent(node.content)}</li>`;
+  if (node.type === "taskList") return `<ul data-type="taskList">${renderInlineContent(node.content)}</ul>`;
+  if (node.type === "taskItem") {
+    const checked = node.attrs?.checked === true;
+    return `<li data-type="taskItem" data-checked="${checked}"><label><input type="checkbox"${checked ? " checked" : ""} disabled></label><div>${renderInlineContent(node.content)}</div></li>`;
+  }
+  if (node.type === "blockquote") return `<blockquote>${renderInlineContent(node.content)}</blockquote>`;
+  if (node.type === "codeBlock") return `<pre><code>${escapeHtml(node.content?.map((child) => child.text ?? "").join("") ?? "")}</code></pre>`;
+  if (node.type === "hardBreak") return "<br>";
+  return renderInlineContent(node.content);
+}
+
 function buildFontFamily(...groups: string[]) {
   return groups.flatMap(parseFontList).join(", ");
 }
@@ -91,34 +153,47 @@ function formatFontName(font: string) {
   return `"${font.replace(/"/g, '\\"')}"`;
 }
 
-const editor = useEditor({
-  content: (props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content),
-  editable: props.editing,
-  extensions: [
-    StarterKit.configure({ link: false }),
-    Placeholder.configure({ placeholder: "输入内容..." }),
-    TextAlign.configure({ types: ["heading", "paragraph"] }),
-    TaskList,
-    TaskItem.configure({ nested: true }),
-    Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
-  ],
-  editorProps: {
-    handleTextInput: () => blockLimitedEditorInput(),
-    handlePaste: () => blockLimitedEditorInput(),
-    handleDOMEvents: {
-      blur: () => {
-        if (props.editing) saveEdit();
-        return false;
+function createEditor() {
+  if (editor.value) return;
+  editor.value = new Editor({
+    content: (props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content),
+    editable: true,
+    extensions: [
+      StarterKit.configure({ link: false }),
+      Placeholder.configure({ placeholder: "输入内容..." }),
+      TextAlign.configure({ types: ["heading", "paragraph"] }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Link.configure({ openOnClick: false, autolink: true, linkOnPaste: true }),
+    ],
+    editorProps: {
+      handleTextInput: () => blockLimitedEditorInput(),
+      handlePaste: () => blockLimitedEditorInput(),
+      handleDOMEvents: {
+        blur: () => {
+          if (props.editing) saveEdit();
+          return false;
+        },
+        keydown: (_view, event) => handleEditorKeydown(event as KeyboardEvent),
+        beforeinput: (_view, event) => blockLimitedBeforeInput(event as InputEvent),
+        paste: (_view, event) => blockLimitedPaste(event as ClipboardEvent),
       },
-      keydown: (_view, event) => handleEditorKeydown(event as KeyboardEvent),
-      beforeinput: (_view, event) => blockLimitedBeforeInput(event as InputEvent),
-      paste: (_view, event) => blockLimitedPaste(event as ClipboardEvent),
     },
-  },
-  onUpdate: ({ editor }) => {
-    draft.value = editor.getText();
-    scheduleAutoGrow();
-  },
+    onUpdate: ({ editor: currentEditor }) => {
+      draft.value = currentEditor.getText();
+      scheduleAutoGrow();
+    },
+  });
+}
+
+function destroyEditor() {
+  editor.value?.destroy();
+  editor.value = null;
+}
+
+const renderedContent = computed(() => {
+  const doc = (props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content);
+  return renderInlineContent(doc.content);
 });
 
 const highlightedContent = computed(() => {
@@ -171,24 +246,34 @@ watch(
   () => props.editing,
   async (editing, wasEditing) => {
     if (!editing && wasEditing) {
-      commitEditorContent(false);
+      if (!skipNextEditingCommit.value) commitEditorContent(false);
+      skipNextEditingCommit.value = false;
+      destroyEditor();
+      return;
     }
-    editor.value?.setEditable(editing);
     if (editing) {
       draft.value = props.note.content;
+      createEditor();
       await nextTick();
       editor.value?.commands.focus("end");
       autoGrowToContent();
     }
   },
+  { immediate: true },
 );
 
 watch(
   () => [props.note.id, props.note.contentJson, props.note.content],
   () => {
-    if (!props.editing) editor.value?.commands.setContent((props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content));
+    if (props.editing) return;
+    draft.value = props.note.content;
   },
 );
+
+onBeforeUnmount(() => {
+  if (props.editing && editor.value) commitEditorContent(false);
+  destroyEditor();
+});
 
 function startDrag(event: MouseEvent) {
   if (props.editing) {
@@ -283,8 +368,14 @@ function endResize() {
 
 function commitEditorContent(finish: boolean) {
   const richEditor = editor.value;
-  emit("update", { content: richEditor?.getText() ?? draft.value, contentJson: richEditor?.getJSON() }, true);
-  if (finish) emit("editingDone");
+  const patch: Partial<StickyNote> = richEditor
+    ? { content: richEditor.getText(), contentJson: richEditor.getJSON() }
+    : { content: draft.value };
+  emit("update", patch, true);
+  if (finish) {
+    skipNextEditingCommit.value = true;
+    emit("editingDone");
+  }
 }
 
 function saveEdit() {
@@ -484,14 +575,14 @@ function toggleDecorationPanel() {
         <span></span>
         <button title="复制选中文字" @click.prevent.stop="copySelectedText"><Copy :size="15" /></button>
       </BubbleMenu>
-      <EditorContent class="editor-content" :editor="editor" :style="editorStyle" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
+      <EditorContent v-if="editor" class="editor-content" :editor="editor" :style="editorStyle" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
     </template>
     <div v-else class="content" :style="contentStyle">
       <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
         <mark v-if="part.match">{{ part.text }}</mark>
         <template v-else>{{ part.text }}</template>
       </template>
-      <EditorContent v-else class="editor-content readonly" :editor="editor" @click.capture="stopLinkNavigation" />
+      <div v-else class="editor-content readonly static-content" v-html="renderedContent" @click.capture="stopLinkNavigation"></div>
     </div>
 
     <div v-if="props.selected && !props.editing" class="note-actions" @mousedown.stop @dblclick.prevent.stop>
@@ -613,6 +704,13 @@ mark {
 .editor-content :deep(.tiptap) {
   min-height: 100%;
   outline: 0;
+  white-space: pre-wrap;
+  tab-size: 4;
+  line-height: 1.55;
+}
+
+.static-content {
+  min-height: 100%;
   white-space: pre-wrap;
   tab-size: 4;
   line-height: 1.55;
