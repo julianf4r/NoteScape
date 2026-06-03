@@ -22,15 +22,16 @@ const emit = defineEmits<{
 
 const mapWidth = 154;
 const mapHeight = 122;
-const padding = 60;
+const worldPadding = 20;
+const mapInset = 4;
 
 const bounds = computed(() => {
   const itemBounds = [...miniNotes.value, ...miniDrawings.value, ...miniImages.value];
   if (!itemBounds.length) return { minX: -400, minY: -300, maxX: 800, maxY: 600, width: 1200, height: 900 };
-  const minX = Math.min(...itemBounds.map((item) => item.minX)) - padding;
-  const minY = Math.min(...itemBounds.map((item) => item.minY)) - padding;
-  const maxX = Math.max(...itemBounds.map((item) => item.maxX)) + padding;
-  const maxY = Math.max(...itemBounds.map((item) => item.maxY)) + padding;
+  const minX = Math.min(...itemBounds.map((item) => item.minX)) - worldPadding;
+  const minY = Math.min(...itemBounds.map((item) => item.minY)) - worldPadding;
+  const maxX = Math.max(...itemBounds.map((item) => item.maxX)) + worldPadding;
+  const maxY = Math.max(...itemBounds.map((item) => item.maxY)) + worldPadding;
   return { minX, minY, maxX, maxY, width: Math.max(1, maxX - minX), height: Math.max(1, maxY - minY) };
 });
 
@@ -62,10 +63,10 @@ const miniImages = computed(() =>
   })),
 );
 
-const mapScale = computed(() => Math.min(mapWidth / bounds.value.width, mapHeight / bounds.value.height));
+const mapScale = computed(() => Math.min((mapWidth - mapInset * 2) / bounds.value.width, (mapHeight - mapInset * 2) / bounds.value.height));
 const offset = computed(() => ({
-  x: (mapWidth - bounds.value.width * mapScale.value) / 2,
-  y: (mapHeight - bounds.value.height * mapScale.value) / 2,
+  x: mapInset + (mapWidth - mapInset * 2 - bounds.value.width * mapScale.value) / 2,
+  y: mapInset + (mapHeight - mapInset * 2 - bounds.value.height * mapScale.value) / 2,
 }));
 const miniDrawingPaths = computed(() =>
   miniDrawings.value
@@ -246,8 +247,11 @@ function clickMap(event: MouseEvent) {
 
 .map {
   position: relative;
+  width: 154px;
   height: 122px;
   margin: 11px;
+  box-sizing: border-box;
+  overflow: hidden;
   background: #f2f2f1;
   border: 1px solid #dedede;
   cursor: var(--cursor-pointer);
