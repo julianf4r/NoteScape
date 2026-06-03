@@ -1738,6 +1738,9 @@ watch(
       </template>
       <template v-else-if="contextMenu.imageId">
         <button @click="openImageViewer(imageStore.images.find((image) => image.id === contextMenu!.imageId)!); contextMenu = null">查看</button>
+        <button @click="toggleImageBackgroundForContext(contextMenu!.imageId!)">
+          {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.showBackground === false ? "显示背景" : "隐藏背景" }}
+        </button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
         <div v-if="moveTargetCanvases.length" class="context-submenu">
           <button class="context-submenu-trigger">
@@ -1752,9 +1755,6 @@ watch(
         </div>
         <button @click="bringObjectForContext('image', contextMenu!.imageId!); contextMenu = null">
           {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.pinned ? "取消置顶" : "置顶" }}
-        </button>
-        <button @click="toggleImageBackgroundForContext(contextMenu!.imageId!)">
-          {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.showBackground === false ? "显示背景" : "隐藏背景" }}
         </button>
         <button @click="deleteObjectForContext('image', contextMenu!.imageId!); contextMenu = null">删除</button>
       </template>
