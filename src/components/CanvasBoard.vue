@@ -82,6 +82,7 @@ type CanvasObjectRef =
   | { type: "note"; item: StickyNoteType }
   | { type: "drawing"; item: DrawingItem }
   | { type: "image"; item: CanvasImageType };
+type BoundsRect = { minX: number; minY: number; maxX: number; maxY: number };
 const canvasHistory = ref<CanvasHistoryBatch[]>([]);
 const canvasFuture = ref<CanvasHistoryBatch[]>([]);
 const pinnedZOffset = 100000;
@@ -1262,6 +1263,120 @@ function drawingBounds(drawing: DrawingItem) {
   };
 }
 
+function rectsIntersect(a: BoundsRect, b: BoundsRect) {
+  return a.maxX >= b.minX && a.minX <= b.maxX && a.maxY >= b.minY && a.minY <= b.maxY;
+}
+
+function normalizedDrawingRect(drawing: DrawingItem): BoundsRect {
+  const x = drawing.x ?? 0;
+  const y = drawing.y ?? 0;
+  const width = drawing.width ?? 0;
+  const height = drawing.height ?? 0;
+  return {
+    minX: Math.min(x, x + width),
+    minY: Math.min(y, y + height),
+    maxX: Math.max(x, x + width),
+    maxY: Math.max(y, y + height),
+  };
+}
+
+function pointInRect(point: DrawingPoint, rect: BoundsRect) {
+  return point.x >= rect.minX && point.x <= rect.maxX && point.y >= rect.minY && point.y <= rect.maxY;
+}
+
+function orientation(a: DrawingPoint, b: DrawingPoint, c: DrawingPoint) {
+  const value = (b.y - a.y) * (c.x - b.x) - (b.x - a.x) * (c.y - b.y);
+  if (Math.abs(value) < 0.000001) return 0;
+  return value > 0 ? 1 : 2;
+}
+
+function pointOnSegment(point: DrawingPoint, start: DrawingPoint, end: DrawingPoint) {
+  return point.x <= Math.max(start.x, end.x) + 0.000001
+    && point.x >= Math.min(start.x, end.x) - 0.000001
+    && point.y <= Math.max(start.y, end.y) + 0.000001
+    && point.y >= Math.min(start.y, end.y) - 0.000001;
+}
+
+function segmentsIntersect(a: DrawingPoint, b: DrawingPoint, c: DrawingPoint, d: DrawingPoint) {
+  const o1 = orientation(a, b, c);
+  const o2 = orientation(a, b, d);
+  const o3 = orientation(c, d, a);
+  const o4 = orientation(c, d, b);
+  if (o1 !== o2 && o3 !== o4) return true;
+  return (o1 === 0 && pointOnSegment(c, a, b))
+    || (o2 === 0 && pointOnSegment(d, a, b))
+    || (o3 === 0 && pointOnSegment(a, c, d))
+    || (o4 === 0 && pointOnSegment(b, c, d));
+}
+
+function segmentIntersectsRect(start: DrawingPoint, end: DrawingPoint, rect: BoundsRect) {
+  if (pointInRect(start, rect) || pointInRect(end, rect)) return true;
+  const topLeft = { x: rect.minX, y: rect.minY };
+  const topRight = { x: rect.maxX, y: rect.minY };
+  const bottomRight = { x: rect.maxX, y: rect.maxY };
+  const bottomLeft = { x: rect.minX, y: rect.maxY };
+  return segmentsIntersect(start, end, topLeft, topRight)
+    || segmentsIntersect(start, end, topRight, bottomRight)
+    || segmentsIntersect(start, end, bottomRight, bottomLeft)
+    || segmentsIntersect(start, end, bottomLeft, topLeft);
+}
+
+function expandRect(rect: BoundsRect, amount: number): BoundsRect {
+  return {
+    minX: rect.minX - amount,
+    minY: rect.minY - amount,
+    maxX: rect.maxX + amount,
+    maxY: rect.maxY + amount,
+  };
+}
+
+function drawingStrokeIntersectsSelection(drawing: DrawingItem, selection: BoundsRect) {
+  const hitRect = expandRect(selection, Math.max(1, (drawing.strokeWidth ?? 1) / 2));
+  if (drawing.type === "text") {
+    const bounds = drawingBounds(drawing);
+    return Boolean(bounds && rectsIntersect(bounds, selection));
+  }
+  if (drawing.type === "line" || drawing.type === "arrow") {
+    return Boolean(drawing.start && drawing.end && segmentIntersectsRect(drawing.start, drawing.end, hitRect));
+  }
+  if (drawing.type === "pen") {
+    const points = drawing.points ?? [];
+    return points.some((point, index) => {
+      if (pointInRect(point, hitRect)) return true;
+      const previous = points[index - 1];
+      return Boolean(previous && segmentIntersectsRect(previous, point, hitRect));
+    });
+  }
+  if (drawing.type === "rect") {
+    const rect = normalizedDrawingRect(drawing);
+    const topLeft = { x: rect.minX, y: rect.minY };
+    const topRight = { x: rect.maxX, y: rect.minY };
+    const bottomRight = { x: rect.maxX, y: rect.maxY };
+    const bottomLeft = { x: rect.minX, y: rect.maxY };
+    return segmentIntersectsRect(topLeft, topRight, hitRect)
+      || segmentIntersectsRect(topRight, bottomRight, hitRect)
+      || segmentIntersectsRect(bottomRight, bottomLeft, hitRect)
+      || segmentIntersectsRect(bottomLeft, topLeft, hitRect);
+  }
+  if (drawing.type === "ellipse") {
+    const rect = normalizedDrawingRect(drawing);
+    const radiusX = Math.abs(rect.maxX - rect.minX) / 2;
+    const radiusY = Math.abs(rect.maxY - rect.minY) / 2;
+    if (radiusX <= 0 || radiusY <= 0) return false;
+    const centerX = rect.minX + radiusX;
+    const centerY = rect.minY + radiusY;
+    const steps = Math.max(36, Math.ceil(Math.max(radiusX, radiusY) / 4));
+    let previous = { x: centerX + radiusX, y: centerY };
+    for (let index = 1; index <= steps; index += 1) {
+      const angle = (Math.PI * 2 * index) / steps;
+      const point = { x: centerX + Math.cos(angle) * radiusX, y: centerY + Math.sin(angle) * radiusY };
+      if (pointInRect(point, hitRect) || segmentIntersectsRect(previous, point, hitRect)) return true;
+      previous = point;
+    }
+  }
+  return false;
+}
+
 function visibleCanvasBounds() {
   return [
     ...visibleNotes.value.map((note) => ({
@@ -1293,6 +1408,12 @@ function finishBoxSelect() {
     boxSelect.value = null;
     return;
   }
+  const selectionWorld = {
+    minX: (left - viewport.offsetX) / viewport.scale,
+    minY: (top - viewport.offsetY) / viewport.scale,
+    maxX: (right - viewport.offsetX) / viewport.scale,
+    maxY: (bottom - viewport.offsetY) / viewport.scale,
+  };
   const selectedNotes = visibleNotes.value.filter((note) => {
     const noteLeft = note.x * viewport.scale + viewport.offsetX;
     const noteTop = note.y * viewport.scale + viewport.offsetY;
@@ -1303,11 +1424,7 @@ function finishBoxSelect() {
   const selectedDrawings = currentCanvasDrawings.value.filter((drawing) => {
     const bounds = drawingBounds(drawing);
     if (!bounds) return false;
-    const drawingLeft = bounds.minX * viewport.scale + viewport.offsetX;
-    const drawingTop = bounds.minY * viewport.scale + viewport.offsetY;
-    const drawingRight = bounds.maxX * viewport.scale + viewport.offsetX;
-    const drawingBottom = bounds.maxY * viewport.scale + viewport.offsetY;
-    return drawingRight >= left && drawingLeft <= right && drawingBottom >= top && drawingTop <= bottom;
+    return rectsIntersect(bounds, selectionWorld) && drawingStrokeIntersectsSelection(drawing, selectionWorld);
   });
   const selectedImages = currentCanvasImages.value.filter((image) => {
     const imageLeft = image.x * viewport.scale + viewport.offsetX;
