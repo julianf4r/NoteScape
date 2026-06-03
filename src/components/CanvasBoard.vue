@@ -66,6 +66,7 @@ const visibleNotes = computed(() =>
 const currentCanvasNotes = computed(() => noteStore.notesForCanvas(canvasStore.currentCanvasId));
 const currentCanvasDrawings = computed(() => drawingStore.drawingsForCanvas(canvasStore.currentCanvasId));
 const currentCanvasImages = computed(() => imageStore.imagesForCanvas(canvasStore.currentCanvasId));
+const moveTargetCanvases = computed(() => canvasStore.activeCanvases.filter((canvas) => canvas.id !== canvasStore.currentCanvasId));
 const filterActive = computed(() => Boolean(tagStore.activeTagId || canvasStore.searchQuery.trim()));
 const activeTag = computed(() => tagStore.activeTag);
 const searchText = computed(() => canvasStore.searchQuery.trim());
@@ -1051,6 +1052,33 @@ function duplicateSelectedObjects() {
   });
 }
 
+function moveSelectedObjectsToCanvas(targetCanvasId: string) {
+  const target = canvasStore.activeCanvases.find((canvas) => canvas.id === targetCanvasId);
+  if (!target || target.id === canvasStore.currentCanvasId || !selectedObjectCount()) {
+    contextMenu.value = null;
+    return;
+  }
+  captureCanvasHistory(() => {
+    noteStore.selectedIds.forEach((id) => {
+      noteStore.updateNote(id, { canvasId: target.id });
+    });
+    drawingStore.selectedIds.forEach((id) => {
+      const drawing = drawingStore.drawings.find((item) => item.id === id);
+      if (!drawing) return;
+      const before = cloneDrawing(drawing);
+      drawingStore.updateDrawing(id, { canvasId: target.id }, true);
+      const after = drawingStore.drawings.find((item) => item.id === id);
+      if (after) drawingStore.addHistory({ type: "update", before, after: cloneDrawing(after) });
+    });
+    imageStore.selectedIds.forEach((id) => {
+      imageStore.updateImage(id, { canvasId: target.id });
+    });
+  });
+  clearObjectSelection();
+  feedback.notify(`已移动到「${target.name}」`, "success");
+  contextMenu.value = null;
+}
+
 function bringSelectedObjectsToFront() {
   captureCanvasHistory(() => {
     const refs = selectedObjectRefs();
@@ -1652,6 +1680,17 @@ watch(
         <button @click="noteStore.editingId = contextMenu!.noteId!; contextMenu = null">编辑</button>
         <button @click="copyNoteText(contextMenu!.noteId!); contextMenu = null">复制文字</button>
         <button @click="duplicateObjectsForContext('note', contextMenu!.noteId!); contextMenu = null">复制一份</button>
+        <div v-if="moveTargetCanvases.length" class="context-submenu">
+          <button class="context-submenu-trigger">
+            <span>移动到</span>
+            <span class="context-submenu-arrow">›</span>
+          </button>
+          <div class="context-submenu-panel">
+            <button v-for="canvas in moveTargetCanvases" :key="canvas.id" @click="moveSelectedObjectsToCanvas(canvas.id)">
+              {{ canvas.name }}
+            </button>
+          </div>
+        </div>
         <button @click="bringObjectForContext('note', contextMenu!.noteId!); contextMenu = null">
           {{ noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.pinned ? "取消置顶" : "置顶" }}
         </button>
@@ -1670,6 +1709,17 @@ watch(
       </template>
       <template v-else-if="contextMenu.drawingId">
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
+        <div v-if="moveTargetCanvases.length" class="context-submenu">
+          <button class="context-submenu-trigger">
+            <span>移动到</span>
+            <span class="context-submenu-arrow">›</span>
+          </button>
+          <div class="context-submenu-panel">
+            <button v-for="canvas in moveTargetCanvases" :key="canvas.id" @click="moveSelectedObjectsToCanvas(canvas.id)">
+              {{ canvas.name }}
+            </button>
+          </div>
+        </div>
         <button @click="bringObjectForContext('drawing', contextMenu!.drawingId!); contextMenu = null">
           {{ drawingStore.drawings.find((drawing) => drawing.id === contextMenu!.drawingId)?.pinned ? "取消置顶" : "置顶" }}
         </button>
@@ -1689,6 +1739,17 @@ watch(
       <template v-else-if="contextMenu.imageId">
         <button @click="openImageViewer(imageStore.images.find((image) => image.id === contextMenu!.imageId)!); contextMenu = null">查看</button>
         <button @click="duplicateSelectedObjects(); contextMenu = null">复制一份</button>
+        <div v-if="moveTargetCanvases.length" class="context-submenu">
+          <button class="context-submenu-trigger">
+            <span>移动到</span>
+            <span class="context-submenu-arrow">›</span>
+          </button>
+          <div class="context-submenu-panel">
+            <button v-for="canvas in moveTargetCanvases" :key="canvas.id" @click="moveSelectedObjectsToCanvas(canvas.id)">
+              {{ canvas.name }}
+            </button>
+          </div>
+        </div>
         <button @click="bringObjectForContext('image', contextMenu!.imageId!); contextMenu = null">
           {{ imageStore.images.find((image) => image.id === contextMenu!.imageId)?.pinned ? "取消置顶" : "置顶" }}
         </button>
@@ -1976,6 +2037,52 @@ watch(
   padding: 0;
   border: 1px solid rgba(0, 0, 0, 0.12);
   border-radius: 50%;
+}
+
+.context-submenu {
+  position: relative;
+}
+
+.context-submenu-trigger {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.context-submenu-arrow {
+  color: #9ca3af;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.context-submenu-panel {
+  position: absolute;
+  left: calc(100% + 4px);
+  top: -4px;
+  z-index: 1;
+  display: none;
+  min-width: 150px;
+  max-width: 220px;
+  max-height: 280px;
+  padding: 4px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
+}
+
+.context-submenu:hover .context-submenu-panel,
+.context-submenu:focus-within .context-submenu-panel {
+  display: grid;
+  gap: 2px;
+}
+
+.context-submenu-panel button {
+  justify-content: flex-start;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .menu-popover button:disabled {
