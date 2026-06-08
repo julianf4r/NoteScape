@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Minus, Paperclip, Pin, Plus, Sparkles, Strikethrough, Tags, Trash2 } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Paperclip, Pin, Strikethrough, Trash2 } from "lucide-vue-next";
 import { Editor, EditorContent, type JSONContent } from "@tiptap/vue-3";
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -9,7 +9,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
-import type { NoteDecoration, StickyNote, TagItem } from "../types";
+import type { StickyNote, TagItem } from "../types";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColors } from "../utils/colors";
@@ -48,22 +48,11 @@ const resizeStart = ref<{ x: number; y: number; before: StickyNote }>();
 const draft = ref(props.note.content);
 const editor = shallowRef<Editor | null>(null);
 const skipNextEditingCommit = ref(false);
-const showTags = ref(false);
-const showDecorations = ref(false);
 const heightLimited = ref(false);
 const limitNoticeShown = ref(false);
 const decoration = computed(() => props.note.decoration ?? "none");
 const frontTitle = computed(() => (props.note.pinned ? "取消置顶" : "置顶"));
 const maxNoteHeight = 1000;
-
-const decorationOptions: Array<{ value: NoteDecoration; label: string }> = [
-  { value: "none", label: "无" },
-  { value: "tape", label: "胶带" },
-  { value: "pin", label: "图钉" },
-  { value: "double-tape", label: "双胶带" },
-  { value: "paperclip", label: "回形针" },
-  { value: "corner-tape", label: "角贴" },
-];
 
 function textToDoc(text: string): JSONContent {
   return {
@@ -382,16 +371,6 @@ function saveEdit() {
   commitEditorContent(true);
 }
 
-function changeFontSize(delta: number) {
-  emit("update", { fontSize: Math.min(32, Math.max(12, props.note.fontSize + delta)) }, true);
-}
-
-function setFontSize(event: Event) {
-  const value = Number((event.target as HTMLInputElement).value);
-  if (Number.isFinite(value)) emit("update", { fontSize: Math.min(32, Math.max(12, value)) }, true);
-  scheduleAutoGrow();
-}
-
 function scheduleAutoGrow() {
   if (!props.editing) return;
   void nextTick(autoGrowToContent);
@@ -523,20 +502,6 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   return props.editing && currentEditor.isEditable && !currentEditor.state.selection.empty;
 }
 
-function changeDecoration(value: NoteDecoration) {
-  emit("update", { decoration: value }, true);
-  showDecorations.value = false;
-}
-
-function toggleTagsPanel() {
-  showTags.value = !showTags.value;
-  if (showTags.value) showDecorations.value = false;
-}
-
-function toggleDecorationPanel() {
-  showDecorations.value = !showDecorations.value;
-  if (showDecorations.value) showTags.value = false;
-}
 </script>
 
 <template>
@@ -586,40 +551,10 @@ function toggleDecorationPanel() {
     </div>
 
     <div v-if="props.selected && !props.editing" class="note-actions" @mousedown.stop @dblclick.prevent.stop>
-      <button title="减小字号" @click="changeFontSize(-1)"><Minus :size="14" /></button>
-      <input class="font-input" type="number" min="12" max="32" :value="props.note.fontSize" @change="setFontSize" />
-      <button title="增大字号" @click="changeFontSize(1)"><Plus :size="14" /></button>
       <button :title="frontTitle" :class="{ active: props.note.pinned }" @click="emit('front')"><ChevronsUp :size="15" /></button>
-      <button title="标签" :class="{ active: showTags }" @click="toggleTagsPanel"><Tags :size="15" /></button>
-      <button title="装饰" :class="{ active: showDecorations }" @click="toggleDecorationPanel"><Sparkles :size="15" /></button>
       <button title="复制文字" @click="emit('copyText')"><FileText :size="15" /></button>
       <button title="复制便签" @click="emit('duplicate')"><Copy :size="15" /></button>
       <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>
-    </div>
-
-    <div v-if="props.selected && !props.editing && showTags" class="tag-panel">
-      <button
-        v-for="tag in props.tags"
-        :key="tag.id"
-        :class="{ active: props.note.tags.includes(tag.id) }"
-        @click="emit('toggleTag', tag.id)"
-      >
-        <i :style="{ backgroundColor: tag.color }"></i>
-        <span>{{ tag.name }}</span>
-      </button>
-      <p v-if="!props.tags.length">暂无标签</p>
-    </div>
-
-    <div v-if="props.selected && !props.editing && showDecorations" class="decoration-panel">
-      <button
-        v-for="option in decorationOptions"
-        :key="option.value"
-        :class="{ active: decoration === option.value }"
-        @click="changeDecoration(option.value)"
-      >
-        <span :class="['decoration-preview', `preview-${option.value}`]"></span>
-        <b>{{ option.label }}</b>
-      </button>
     </div>
 
     <span v-if="props.selected && !props.editing" class="resize-handle" @mousedown="startResize"></span>
@@ -810,7 +745,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  width: 300px;
+  width: max-content;
   padding: 5px;
   background: #fff;
   border: 1px solid #e5e7eb;

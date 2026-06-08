@@ -17,7 +17,7 @@ import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useDrawingStore } from "../stores/drawingStore";
 import { useImageStore } from "../stores/imageStore";
-import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteColor, StickyNote as StickyNoteType, ViewportState } from "../types";
+import type { CanvasImage as CanvasImageType, DrawingItem, DrawingPoint, NoteColor, NoteDecoration, StickyNote as StickyNoteType, ViewportState } from "../types";
 import { noteColorList, noteColors } from "../utils/colors";
 import { clamp, screenToWorld } from "../utils/geometry";
 import { contentJsonToMarkdown } from "../utils/markdown";
@@ -86,6 +86,20 @@ type BoundsRect = { minX: number; minY: number; maxX: number; maxY: number };
 const canvasHistory = ref<CanvasHistoryBatch[]>([]);
 const canvasFuture = ref<CanvasHistoryBatch[]>([]);
 const pinnedZOffset = 100000;
+const noteDecorationOptions: Array<{ value: NoteDecoration; label: string }> = [
+  { value: "none", label: "无" },
+  { value: "tape", label: "胶带" },
+  { value: "pin", label: "图钉" },
+  { value: "double-tape", label: "双胶带" },
+  { value: "paperclip", label: "回形针" },
+  { value: "corner-tape", label: "角贴" },
+];
+const noteFontSizeOptions = computed(() => [
+  { label: "小", value: 14 },
+  { label: "默认", value: settingsStore.settings.defaultFontSize },
+  { label: "大", value: 20 },
+  { label: "更大", value: 24 },
+]);
 const globalMaxZ = computed(() =>
   Math.max(
     0,
@@ -1158,6 +1172,23 @@ function toggleTagForSelection(noteId: string, tagId: string) {
   });
 }
 
+function changeFontSizeForContext(noteId: string, fontSize: number) {
+  const size = Math.min(32, Math.max(12, fontSize));
+  captureCanvasHistory(() => {
+    if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ fontSize: size });
+    else noteStore.updateNote(noteId, { fontSize: size });
+  });
+  contextMenu.value = null;
+}
+
+function changeDecorationForContext(noteId: string, decoration: NoteDecoration) {
+  captureCanvasHistory(() => {
+    if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ decoration });
+    else noteStore.updateNote(noteId, { decoration });
+  });
+  contextMenu.value = null;
+}
+
 function changeColorForContext(noteId: string, color: NoteColor) {
   captureCanvasHistory(() => {
     if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ color });
@@ -1808,6 +1839,56 @@ watch(
             </button>
           </div>
         </div>
+        <div class="context-submenu">
+          <button class="context-submenu-trigger">
+            <span>字号</span>
+            <span class="context-submenu-arrow">›</span>
+          </button>
+          <div class="context-submenu-panel">
+            <button
+              v-for="option in noteFontSizeOptions"
+              :key="option.label"
+              :class="{ active: noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.fontSize === option.value }"
+              @click="changeFontSizeForContext(contextMenu!.noteId!, option.value)"
+            >
+              {{ option.label }} {{ option.value }}
+            </button>
+          </div>
+        </div>
+        <div class="context-submenu">
+          <button class="context-submenu-trigger">
+            <span>标签</span>
+            <span class="context-submenu-arrow">›</span>
+          </button>
+          <div class="context-submenu-panel">
+            <button
+              v-for="tag in tagStore.tags"
+              :key="tag.id"
+              :class="{ active: noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.tags.includes(tag.id) }"
+              @click="toggleTagForSelection(contextMenu!.noteId!, tag.id)"
+            >
+              <i class="context-tag-dot" :style="{ backgroundColor: tag.color }"></i>
+              <span>{{ tag.name }}</span>
+            </button>
+            <button v-if="!tagStore.tags.length" disabled>暂无标签</button>
+          </div>
+        </div>
+        <div class="context-submenu">
+          <button class="context-submenu-trigger">
+            <span>装饰</span>
+            <span class="context-submenu-arrow">›</span>
+          </button>
+          <div class="context-submenu-panel">
+            <button
+              v-for="option in noteDecorationOptions"
+              :key="option.value"
+              :class="{ active: (noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.decoration ?? 'none') === option.value }"
+              @click="changeDecorationForContext(contextMenu!.noteId!, option.value)"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+        </div>
         <button @click="bringObjectForContext('note', contextMenu!.noteId!); contextMenu = null">
           {{ noteStore.notes.find((note) => note.id === contextMenu!.noteId)?.pinned ? "取消置顶" : "置顶" }}
         </button>
@@ -2200,6 +2281,19 @@ watch(
   text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.context-submenu-panel button.active {
+  color: #1d4ed8;
+  background: #e8f1ff;
+}
+
+.context-tag-dot {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  margin-right: 7px;
+  border-radius: 50%;
 }
 
 .menu-popover button:disabled {
