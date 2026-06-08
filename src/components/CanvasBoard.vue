@@ -2235,6 +2235,16 @@ watch(
   position: relative;
 }
 
+.context-submenu::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: 0;
+  width: 10px;
+  height: 100%;
+  background: transparent;
+}
+
 .context-submenu-trigger {
   width: 100%;
   justify-content: space-between;
@@ -2248,31 +2258,19 @@ watch(
 
 .context-submenu-panel {
   position: absolute;
-  left: 100%;
+  left: calc(100% + 4px);
   top: -8px;
   z-index: 1;
   display: none;
   min-width: 150px;
   max-width: 220px;
   max-height: 280px;
-  padding: 8px 4px 4px 8px;
+  padding: 4px;
   overflow-y: auto;
-  background:
-    linear-gradient(#ffffff, #ffffff) 4px 4px / calc(100% - 4px) calc(100% - 4px) no-repeat;
-  border-radius: 8px;
-  filter: drop-shadow(0 14px 17px rgba(15, 23, 42, 0.12));
-}
-
-.context-submenu-panel::before {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: 4px;
-  right: 0;
-  bottom: 0;
-  z-index: -1;
+  background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
 }
 
 .context-submenu:hover .context-submenu-panel {
