@@ -97,8 +97,8 @@ const noteDecorationOptions: Array<{ value: NoteDecoration; label: string }> = [
 const noteFontSizeOptions = computed(() => [
   { label: "小", value: 14 },
   { label: "默认", value: settingsStore.settings.defaultFontSize },
-  { label: "大", value: 20 },
-  { label: "更大", value: 24 },
+  { label: "大", value: 24 },
+  { label: "更大", value: 36 },
 ]);
 const globalMaxZ = computed(() =>
   Math.max(
@@ -1173,7 +1173,7 @@ function toggleTagForSelection(noteId: string, tagId: string) {
 }
 
 function changeFontSizeForContext(noteId: string, fontSize: number) {
-  const size = Math.min(32, Math.max(12, fontSize));
+  const size = Math.min(36, Math.max(12, fontSize));
   captureCanvasHistory(() => {
     if (noteStore.selectedIds.length > 1 && noteStore.selectedIds.includes(noteId)) noteStore.updateSelected({ fontSize: size });
     else noteStore.updateNote(noteId, { fontSize: size });
