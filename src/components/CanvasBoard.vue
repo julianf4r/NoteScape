@@ -2281,8 +2281,7 @@ watch(
   border-radius: 8px;
 }
 
-.context-submenu:hover .context-submenu-panel,
-.context-submenu:focus-within .context-submenu-panel {
+.context-submenu:hover .context-submenu-panel {
   display: grid;
   gap: 2px;
 }
