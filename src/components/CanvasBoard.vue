@@ -2254,19 +2254,31 @@ watch(
 
 .context-submenu-panel {
   position: absolute;
-  left: calc(100% + 4px);
-  top: -4px;
+  left: 100%;
+  top: -8px;
   z-index: 1;
   display: none;
   min-width: 150px;
   max-width: 220px;
   max-height: 280px;
-  padding: 4px;
+  padding: 8px 4px 4px 8px;
   overflow-y: auto;
-  background: #ffffff;
+  background:
+    linear-gradient(#ffffff, #ffffff) 4px 4px / calc(100% - 4px) calc(100% - 4px) no-repeat;
+  border-radius: 8px;
+  filter: drop-shadow(0 14px 17px rgba(15, 23, 42, 0.12));
+}
+
+.context-submenu-panel::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 4px;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
-  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14);
 }
 
 .context-submenu:hover .context-submenu-panel,
