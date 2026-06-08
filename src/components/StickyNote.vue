@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, shallowRef, watch } from "vue";
-import { AlignCenter, AlignLeft, Bold, ChevronsUp, Copy, FileText, Paperclip, Pin, Strikethrough, Trash2 } from "lucide-vue-next";
+import { AlignCenter, AlignLeft, Bold, Copy, Paperclip, Pin, Strikethrough } from "lucide-vue-next";
 import { Editor, EditorContent, type JSONContent } from "@tiptap/vue-3";
 import { BubbleMenu } from "@tiptap/vue-3/menus";
 import StarterKit from "@tiptap/starter-kit";
@@ -9,7 +9,7 @@ import TextAlign from "@tiptap/extension-text-align";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
-import type { StickyNote, TagItem } from "../types";
+import type { StickyNote } from "../types";
 import { useFeedbackStore } from "../stores/feedbackStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { noteColors } from "../utils/colors";
@@ -23,7 +23,6 @@ const props = defineProps<{
   editing: boolean;
   shadow: boolean;
   scale: number;
-  tags: TagItem[];
   searchQuery: string;
   highlighted: boolean;
   panMode: boolean;
@@ -34,13 +33,8 @@ const emit = defineEmits<{
   edit: [];
   update: [patch: Partial<StickyNote>, track?: boolean];
   live: [patch: Partial<StickyNote>];
-  delete: [];
-  duplicate: [];
-  copyText: [];
-  front: [];
   context: [event: MouseEvent, payload?: { linkHref?: string; codeText?: string }];
   editingDone: [];
-  toggleTag: [tagId: string];
 }>();
 
 const dragStart = ref<{ x: number; y: number; before: StickyNote }>();
@@ -51,7 +45,6 @@ const skipNextEditingCommit = ref(false);
 const heightLimited = ref(false);
 const limitNoticeShown = ref(false);
 const decoration = computed(() => props.note.decoration ?? "none");
-const frontTitle = computed(() => (props.note.pinned ? "取消置顶" : "置顶"));
 const maxNoteHeight = 1000;
 
 function textToDoc(text: string): JSONContent {
@@ -273,7 +266,7 @@ function startDrag(event: MouseEvent) {
     emit("select", event);
     return;
   }
-  if ((event.target as HTMLElement).closest(".note-actions, .resize-handle")) return;
+  if ((event.target as HTMLElement).closest(".resize-handle")) return;
   emit("select", event);
   if (event.defaultPrevented) return;
   dragStart.value = { x: event.clientX, y: event.clientY, before: { ...props.note } };
@@ -550,13 +543,6 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
       <div v-else class="editor-content readonly static-content" v-html="renderedContent" @click.capture="stopLinkNavigation"></div>
     </div>
 
-    <div v-if="props.selected && !props.editing" class="note-actions" @mousedown.stop @dblclick.prevent.stop>
-      <button :title="frontTitle" :class="{ active: props.note.pinned }" @click="emit('front')"><ChevronsUp :size="15" /></button>
-      <button title="复制文字" @click="emit('copyText')"><FileText :size="15" /></button>
-      <button title="复制便签" @click="emit('duplicate')"><Copy :size="15" /></button>
-      <button title="删除" @click="emit('delete')"><Trash2 :size="15" /></button>
-    </div>
-
     <span v-if="props.selected && !props.editing" class="resize-handle" @mousedown="startResize"></span>
   </article>
 </template>
@@ -737,61 +723,9 @@ mark {
   background-size: 18px 18px;
 }
 
-.note-actions {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 12px);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  width: max-content;
-  padding: 5px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  box-shadow: var(--shadow-md);
-  transform: translateX(-50%);
-  font-size: 13px;
-  line-height: 1;
-}
-
-.note-actions button {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: #374151;
-  background: transparent;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.note-actions button:hover {
-  background: #f1f5f9;
-}
-
-.note-actions button.active,
 .text-menu button.active {
   color: #1d4ed8;
   background: #e8f1ff;
-}
-
-.font-input {
-  width: 42px;
-  height: 26px;
-  padding: 0 3px;
-  color: #374151;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 1;
-  text-align: center;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  outline: 0;
-  background: #fff;
 }
 
 .text-menu {
@@ -839,190 +773,6 @@ mark {
   border: 2px solid #fff;
   border-radius: 50%;
   cursor: var(--cursor-resize-nwse);
-}
-
-.tag-panel {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 12px);
-  min-width: 150px;
-  max-width: 210px;
-  padding: 6px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  box-shadow: var(--shadow-md);
-  transform: translateX(-50%);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 1.3;
-  text-align: left;
-}
-
-.tag-panel button {
-  width: 100%;
-  min-height: 30px;
-  display: grid;
-  grid-template-columns: 16px 1fr;
-  align-items: center;
-  gap: 7px;
-  padding: 0 8px;
-  color: #374151;
-  background: transparent;
-  border-radius: 7px;
-  text-align: left;
-}
-
-.tag-panel button:hover,
-.tag-panel button.active {
-  background: #eef2f7;
-}
-
-.tag-panel i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-}
-
-.tag-panel span {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.tag-panel p {
-  margin: 6px;
-  color: #9ca3af;
-  font-size: 13px;
-}
-
-.decoration-panel {
-  position: absolute;
-  left: 50%;
-  top: calc(100% + 12px);
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  width: 190px;
-  padding: 6px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  box-shadow: var(--shadow-md);
-  transform: translateX(-50%);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 13px;
-  line-height: 1.2;
-}
-
-.decoration-panel button {
-  min-height: 32px;
-  display: grid;
-  grid-template-columns: 26px 1fr;
-  align-items: center;
-  gap: 6px;
-  padding: 0 7px;
-  color: #374151;
-  background: transparent;
-  border-radius: 7px;
-  text-align: left;
-}
-
-.decoration-panel button:hover,
-.decoration-panel button.active {
-  background: #eef2f7;
-}
-
-.decoration-panel b {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-weight: 500;
-}
-
-.decoration-preview {
-  position: relative;
-  display: block;
-  width: 24px;
-  height: 20px;
-}
-
-.preview-none::before {
-  content: "";
-  position: absolute;
-  left: 5px;
-  top: 9px;
-  width: 14px;
-  height: 2px;
-  background: #cbd5e1;
-}
-
-.preview-tape::before,
-.preview-double-tape::before,
-.preview-double-tape::after,
-.preview-corner-tape::before {
-  content: "";
-  position: absolute;
-  background: rgba(201, 173, 128, 0.64);
-}
-
-.preview-tape::before {
-  left: 4px;
-  top: 6px;
-  width: 16px;
-  height: 8px;
-  transform: rotate(4deg);
-}
-
-.preview-double-tape::before,
-.preview-double-tape::after {
-  top: 5px;
-  width: 10px;
-  height: 7px;
-}
-
-.preview-double-tape::before {
-  left: 1px;
-  transform: rotate(-10deg);
-}
-
-.preview-double-tape::after {
-  right: 1px;
-  transform: rotate(10deg);
-}
-
-.preview-pin::before {
-  content: "";
-  position: absolute;
-  left: 7px;
-  top: 3px;
-  width: 10px;
-  height: 10px;
-  background: #0ea5e9;
-  border-radius: 50%;
-  box-shadow: 0 7px 0 -4px #075985;
-}
-
-.preview-paperclip::before {
-  content: "";
-  position: absolute;
-  left: 6px;
-  top: 2px;
-  width: 10px;
-  height: 16px;
-  border: 2px solid #64748b;
-  border-left-color: transparent;
-  border-radius: 8px;
-  transform: rotate(18deg);
-}
-
-.preview-corner-tape::before {
-  right: 2px;
-  top: 2px;
-  width: 14px;
-  height: 8px;
-  transform: rotate(42deg);
 }
 
 .tape {

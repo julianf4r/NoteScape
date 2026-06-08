@@ -1737,7 +1737,6 @@ watch(
         :editing="noteStore.editingId === note.id"
         :shadow="settingsStore.settings.noteShadow"
         :scale="viewport.scale"
-        :tags="tagStore.tags"
         :search-query="canvasStore.searchQuery"
         :highlighted="highlightedNoteId === note.id"
         :pan-mode="handActive || spaceDown || drawingStore.tool !== 'select'"
@@ -1745,13 +1744,8 @@ watch(
         @edit="!handActive && drawingStore.tool === 'select' && (noteStore.editingId = note.id)"
         @update="(patch, track) => updateSelection(note, patch, track)"
         @live="(patch) => noteStore.patchNoteLive(note.id, patch)"
-        @delete="deleteObjectForContext('note', note.id)"
-        @duplicate="duplicateObjectsForContext('note', note.id)"
-        @copy-text="copyNoteText(note.id)"
-        @front="bringObjectForContext('note', note.id)"
         @context="(event, payload) => openNoteMenu(event, note.id, payload)"
         @editing-done="noteStore.stopEditing()"
-        @toggle-tag="(tagId) => toggleTagForSelection(note.id, tagId)"
       />
     </div>
 
