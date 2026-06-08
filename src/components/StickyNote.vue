@@ -711,7 +711,9 @@ mark {
 
 .static-content {
   min-height: 100%;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
+  word-break: break-word;
   tab-size: 4;
   line-height: 1.55;
 }
@@ -735,8 +737,16 @@ mark {
 
 .editor-content :deep(code) {
   padding: 0.08em 0.34em;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
   background: rgba(15, 23, 42, 0.08);
   border-radius: 5px;
+}
+
+.editor-content :deep(a) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .editor-content :deep(pre) {
@@ -750,6 +760,9 @@ mark {
 
 .editor-content :deep(pre code) {
   padding: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-word;
   background: transparent;
   border-radius: 0;
 }
