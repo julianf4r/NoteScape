@@ -74,7 +74,7 @@ function attrsToString(attrs: Record<string, string | number | boolean | null | 
 }
 
 function renderTextNode(node: JSONContent) {
-  let html = escapeHtml(node.text ?? "");
+  let html = renderHighlightedText(node.text ?? "");
   for (const mark of node.marks ?? []) {
     if (mark.type === "bold") html = `<strong>${html}</strong>`;
     else if (mark.type === "strike") html = `<s>${html}</s>`;
@@ -84,6 +84,24 @@ function renderTextNode(node: JSONContent) {
       html = href ? `<a href="${escapeHtml(href)}">${html}</a>` : html;
     }
   }
+  return html;
+}
+
+function renderHighlightedText(text: string) {
+  const query = props.searchQuery.trim();
+  if (!query) return escapeHtml(text);
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  let html = "";
+  let index = 0;
+  let matchIndex = lowerText.indexOf(lowerQuery);
+  while (matchIndex >= 0) {
+    html += escapeHtml(text.slice(index, matchIndex));
+    html += `<mark>${escapeHtml(text.slice(matchIndex, matchIndex + query.length))}</mark>`;
+    index = matchIndex + query.length;
+    matchIndex = lowerText.indexOf(lowerQuery, index);
+  }
+  html += escapeHtml(text.slice(index));
   return html;
 }
 
@@ -112,7 +130,7 @@ function renderStaticNode(node: JSONContent): string {
     return `<li data-type="taskItem" data-checked="${checked}"><label><input type="checkbox"${checked ? " checked" : ""} disabled></label><div>${renderInlineContent(node.content)}</div></li>`;
   }
   if (node.type === "blockquote") return `<blockquote>${renderInlineContent(node.content)}</blockquote>`;
-  if (node.type === "codeBlock") return `<pre><code>${escapeHtml(node.content?.map((child) => child.text ?? "").join("") ?? "")}</code></pre>`;
+  if (node.type === "codeBlock") return `<pre><code>${renderHighlightedText(node.content?.map((child) => child.text ?? "").join("") ?? "")}</code></pre>`;
   if (node.type === "hardBreak") return "<br>";
   return renderInlineContent(node.content);
 }
@@ -176,24 +194,6 @@ function destroyEditor() {
 const renderedContent = computed(() => {
   const doc = (props.note.contentJson as JSONContent | undefined) ?? textToDoc(props.note.content);
   return renderInlineContent(doc.content);
-});
-
-const highlightedContent = computed(() => {
-  const query = props.searchQuery.trim();
-  if (!query) return [{ text: props.note.content, match: false }];
-  const lowerContent = props.note.content.toLowerCase();
-  const lowerQuery = query.toLowerCase();
-  const parts: Array<{ text: string; match: boolean }> = [];
-  let index = 0;
-  let matchIndex = lowerContent.indexOf(lowerQuery);
-  while (matchIndex >= 0) {
-    if (matchIndex > index) parts.push({ text: props.note.content.slice(index, matchIndex), match: false });
-    parts.push({ text: props.note.content.slice(matchIndex, matchIndex + query.length), match: true });
-    index = matchIndex + query.length;
-    matchIndex = lowerContent.indexOf(lowerQuery, index);
-  }
-  if (index < props.note.content.length) parts.push({ text: props.note.content.slice(index), match: false });
-  return parts.length ? parts : [{ text: props.note.content, match: false }];
 });
 
 const style = computed(() => ({
@@ -536,11 +536,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
       <EditorContent v-if="editor" class="editor-content" :editor="editor" :style="editorStyle" @mousedown.stop @click.capture="stopLinkNavigation" @keydown.esc.capture.prevent.stop="saveEdit" />
     </template>
     <div v-else class="content" :style="contentStyle">
-      <template v-if="props.searchQuery.trim()" v-for="(part, index) in highlightedContent" :key="index">
-        <mark v-if="part.match">{{ part.text }}</mark>
-        <template v-else>{{ part.text }}</template>
-      </template>
-      <div v-else class="editor-content readonly static-content" v-html="renderedContent" @click.capture="stopLinkNavigation"></div>
+      <div class="editor-content readonly static-content" v-html="renderedContent" @click.capture="stopLinkNavigation"></div>
     </div>
 
     <span v-if="props.selected && !props.editing" class="resize-handle" @mousedown="startResize"></span>
@@ -595,7 +591,7 @@ function shouldShowTextMenu({ editor: currentEditor }: { editor: { isEditable: b
   font-family: inherit;
 }
 
-mark {
+.editor-content :deep(mark) {
   padding: 0 2px;
   background: rgba(250, 204, 21, 0.55);
   border-radius: 3px;
