@@ -149,14 +149,26 @@ function useDefaultImageLibrary() {
             <button :class="{ active: settings.theme === 'system' }" @click="settingsStore.updateSettings({ theme: 'system' })">跟随系统</button>
           </div>
         </div>
-        <label class="switch">
+        <div class="switch-row">
           <span>显示网格点</span>
-          <input type="checkbox" :checked="settings.showGrid" @change="settingsStore.updateSettings({ showGrid: ($event.target as HTMLInputElement).checked })" />
-        </label>
-        <label class="switch">
+          <button
+            class="toggle"
+            role="switch"
+            :aria-checked="settings.showGrid"
+            aria-label="显示网格点"
+            @click="settingsStore.updateSettings({ showGrid: !settings.showGrid })"
+          ><i></i></button>
+        </div>
+        <div class="switch-row">
           <span>便签阴影</span>
-          <input type="checkbox" :checked="settings.noteShadow" @change="settingsStore.updateSettings({ noteShadow: ($event.target as HTMLInputElement).checked })" />
-        </label>
+          <button
+            class="toggle"
+            role="switch"
+            :aria-checked="settings.noteShadow"
+            aria-label="便签阴影"
+            @click="settingsStore.updateSettings({ noteShadow: !settings.noteShadow })"
+          ><i></i></button>
+        </div>
       </section>
 
       <section>
@@ -177,14 +189,26 @@ function useDefaultImageLibrary() {
           <span>等宽字体</span>
           <input type="text" :value="settings.monospaceFontFamily" @change="settingsStore.updateSettings({ monospaceFontFamily: ($event.target as HTMLInputElement).value })" />
         </label>
-        <label class="switch">
+        <div class="switch-row">
           <span>随机旋转</span>
-          <input type="checkbox" :checked="settings.randomRotation" @change="settingsStore.updateSettings({ randomRotation: ($event.target as HTMLInputElement).checked })" />
-        </label>
-        <label class="switch">
+          <button
+            class="toggle"
+            role="switch"
+            :aria-checked="settings.randomRotation"
+            aria-label="随机旋转"
+            @click="settingsStore.updateSettings({ randomRotation: !settings.randomRotation })"
+          ><i></i></button>
+        </div>
+        <div class="switch-row">
           <span>自动保存</span>
-          <input type="checkbox" :checked="settings.autoSave" @change="settingsStore.updateSettings({ autoSave: ($event.target as HTMLInputElement).checked })" />
-        </label>
+          <button
+            class="toggle"
+            role="switch"
+            :aria-checked="settings.autoSave"
+            aria-label="自动保存"
+            @click="settingsStore.updateSettings({ autoSave: !settings.autoSave })"
+          ><i></i></button>
+        </div>
       </section>
 
       <section>
@@ -288,6 +312,7 @@ section {
 }
 
 .setting-row,
+.switch-row,
 label {
   display: grid;
   grid-template-columns: 1fr 140px;
@@ -299,6 +324,10 @@ label {
 
 .setting-row {
   grid-template-columns: 1fr 184px;
+}
+
+.switch-row {
+  grid-template-columns: 1fr auto;
 }
 
 select,
@@ -323,10 +352,41 @@ input[type="text"] {
   grid-template-columns: 78px 1fr;
 }
 
-.switch input {
-  justify-self: end;
-  width: 18px;
-  height: 18px;
+.toggle {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  background: var(--border-color);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.toggle i {
+  position: absolute;
+  left: 3px;
+  top: 3px;
+  width: 16px;
+  height: 16px;
+  background: var(--surface-raised);
+  border-radius: 50%;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.16s ease;
+}
+
+.toggle[aria-checked="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.toggle[aria-checked="true"] i {
+  transform: translateX(18px);
+}
+
+.toggle:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 
 .theme-segments {
