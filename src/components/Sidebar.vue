@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import { Archive, ArrowDown, ArrowUp, Ellipsis, FileText, Menu, Pencil, Plus, RotateCcw, Settings, Trash2, X } from "lucide-vue-next";
+import { getVersion } from "@tauri-apps/api/app";
 import SearchBox from "./SearchBox.vue";
 import { useAppStore } from "../stores/appStore";
 import { useCanvasStore } from "../stores/canvasStore";
@@ -10,7 +11,6 @@ import { useImageStore } from "../stores/imageStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { useTagStore } from "../stores/tagStore";
 import { useFeedbackStore } from "../stores/feedbackStore";
-import packageInfo from "../../package.json";
 
 const appStore = useAppStore();
 const canvasStore = useCanvasStore();
@@ -29,7 +29,7 @@ const tagColorDraft = ref("#3b82f6");
 const collapsed = ref(false);
 const openCanvasMenuId = ref("");
 const openTagMenuId = ref("");
-const appVersion = packageInfo.version;
+const appVersion = ref("");
 const hasSearchQuery = computed(() => Boolean(canvasStore.searchQuery.trim()));
 
 const filteredCanvases = computed(() => {
@@ -255,8 +255,13 @@ function closeCanvasMenu() {
   openTagMenuId.value = "";
 }
 
-onMounted(() => {
+onMounted(async () => {
   window.addEventListener("mousedown", closeCanvasMenu);
+  try {
+    appVersion.value = await getVersion();
+  } catch {
+    appVersion.value = "";
+  }
 });
 
 onUnmounted(() => {
@@ -272,7 +277,7 @@ onUnmounted(() => {
       </button>
       <div v-if="!collapsed" class="brand">
         <strong>贴境</strong>
-        <span>v{{ appVersion }}</span>
+        <span v-if="appVersion">v{{ appVersion }}</span>
       </div>
     </div>
 
