@@ -263,8 +263,8 @@ function clickMap(event: MouseEvent) {
   z-index: 25;
   width: 176px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid #e5e7eb;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
 }
@@ -276,8 +276,8 @@ function clickMap(event: MouseEvent) {
   margin: 11px;
   box-sizing: border-box;
   overflow: hidden;
-  background: #f2f2f1;
-  border: 1px solid #dedede;
+  background: var(--minimap-bg);
+  border: 1px solid var(--minimap-border);
   cursor: var(--cursor-pointer);
 }
 
@@ -290,7 +290,7 @@ function clickMap(event: MouseEvent) {
 .mini-item.note,
 .mini-item.image {
   border: 1px solid rgba(100, 116, 139, 0.45);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.38) inset;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface-raised) 38%, transparent) inset;
 }
 
 .mini-item.image {
@@ -316,7 +316,7 @@ function clickMap(event: MouseEvent) {
   display: grid;
   grid-template-columns: 34px 1fr 34px 34px;
   align-items: center;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border-color);
 }
 
 button {
@@ -324,13 +324,13 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
 }
 
 b {
   text-align: center;
   font-size: 13px;
-  color: #4b5563;
+  color: var(--text-secondary);
 }
 </style>

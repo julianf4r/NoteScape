@@ -30,16 +30,16 @@ onUnmounted(() => window.removeEventListener("focus-search", focus));
   align-items: center;
   gap: 8px;
   padding: 0 11px;
-  color: #9ca3af;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: var(--text-muted);
+  background: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 input {
   min-width: 0;
-  color: #374151;
+  color: var(--text-primary);
   border: 0;
   outline: 0;
   background: transparent;
@@ -47,6 +47,6 @@ input {
 
 span {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 </style>

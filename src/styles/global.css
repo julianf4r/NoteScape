@@ -43,12 +43,12 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-
 button,
 input,
 textarea,
 select {
   font: inherit;
+  color: inherit;
 }
 
 button {
@@ -62,13 +62,13 @@ button {
   justify-content: center;
   width: 34px;
   height: 34px;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 7px;
 }
 
 .icon-button:hover {
-  background: #f1f5f9;
+  background: var(--surface-hover);
 }
 
 .menu-popover {
@@ -76,10 +76,10 @@ button {
   z-index: 1000;
   min-width: 158px;
   padding: 6px;
-  background: #fff;
-  border: 1px solid #eceff3;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--shadow-lg);
 }
 
 .menu-popover button {
@@ -88,12 +88,12 @@ button {
   align-items: center;
   gap: 8px;
   padding: 9px 10px;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 7px;
   text-align: left;
 }
 
 .menu-popover button:hover {
-  background: #f3f6fb;
+  background: var(--surface-active);
 }

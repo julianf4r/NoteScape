@@ -467,13 +467,13 @@ onUnmounted(() => {
 }
 
 .brand strong {
-  color: #1f2937;
+  color: var(--text-primary);
   font-size: 17px;
   font-weight: 800;
 }
 
 .brand span {
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -528,8 +528,8 @@ onUnmounted(() => {
 .search-results {
   flex: 0 0 auto;
   padding: 8px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: var(--shadow-sm);
 }
@@ -537,13 +537,13 @@ onUnmounted(() => {
 .result-group + .result-group {
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid #eef1f4;
+  border-top: 1px solid var(--border-soft);
 }
 
 .result-group h3 {
   margin: 0 0 5px;
   padding: 0 4px;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
   font-weight: 700;
 }
@@ -556,7 +556,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 0 7px;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 7px;
   text-align: left;
@@ -564,7 +564,7 @@ onUnmounted(() => {
 }
 
 .result-group button:hover {
-  background: #eef2f7;
+  background: var(--surface-hover);
 }
 
 .result-group button span {
@@ -579,7 +579,7 @@ onUnmounted(() => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  color: #9ca3af;
+  color: var(--text-muted);
   font-size: 12px;
 }
 
@@ -595,7 +595,7 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 0 0 6px 6px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .new-button,
@@ -607,7 +607,7 @@ onUnmounted(() => {
   width: 30px;
   height: 30px;
   padding: 0;
-  color: #64748b;
+  color: var(--text-secondary);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
@@ -617,15 +617,15 @@ onUnmounted(() => {
 
 .new-button:hover,
 .small-add:hover {
-  color: #334155;
-  background: #eef2f7;
-  border-color: #e2e8f0;
+  color: var(--text-primary);
+  background: var(--surface-hover);
+  border-color: var(--border-color);
 }
 
 .new-button:disabled,
 .small-add:disabled {
   cursor: var(--cursor-not-allowed);
-  color: #9ca3af;
+  color: var(--text-muted);
   background: transparent;
 }
 
@@ -640,7 +640,7 @@ onUnmounted(() => {
   width: 100%;
   height: 42px;
   padding: 0 10px;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 7px;
   text-align: left;
@@ -656,7 +656,7 @@ onUnmounted(() => {
 }
 
 .canvas-row.active {
-  color: #1d4ed8;
+  color: var(--primary-text);
   background: var(--primary-soft);
 }
 
@@ -674,7 +674,7 @@ onUnmounted(() => {
 .tag-row:hover,
 .settings:hover,
 .tag-row.active {
-  background: #eef2f7;
+  background: var(--surface-hover);
 }
 
 .name {
@@ -714,15 +714,15 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--text-secondary);
   background: transparent;
   border-radius: 6px;
   opacity: 0.72;
 }
 
 .row-tail button:hover {
-  color: #1f2937;
-  background: #fff;
+  color: var(--text-primary);
+  background: var(--surface-raised);
   opacity: 1;
 }
 
@@ -730,7 +730,7 @@ onUnmounted(() => {
   min-width: 0;
   border: 0;
   outline: 0;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
 }
 
@@ -740,14 +740,14 @@ onUnmounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #6b7280;
+  color: var(--text-secondary);
   background: transparent;
   border-radius: 6px;
 }
 
 .trash-row button:hover {
-  color: #1f2937;
-  background: #fff;
+  color: var(--text-primary);
+  background: var(--surface-raised);
 }
 
 .row-action-menu {
@@ -757,10 +757,10 @@ onUnmounted(() => {
   z-index: 20;
   width: 112px;
   padding: 5px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid #e5e7eb;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  box-shadow: var(--shadow-md);
 }
 
 .row-action-menu button {
@@ -770,7 +770,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 7px;
   padding: 0 8px;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 6px;
   font-size: 13px;
@@ -778,22 +778,22 @@ onUnmounted(() => {
 }
 
 .row-action-menu button:hover {
-  background: #f3f6fb;
+  background: var(--surface-active);
 }
 
 .row-action-menu button:disabled {
   cursor: var(--cursor-default);
-  color: #aeb6c2;
+  color: var(--text-muted);
   background: transparent;
 }
 
 .row-action-menu button.danger {
-  color: #b91c1c;
+  color: var(--danger-text);
 }
 
 .trash {
   margin-top: 16px;
-  border-top: 1px solid #edf0f3;
+  border-top: 1px solid var(--border-soft);
   border-radius: 7px;
 }
 
@@ -811,12 +811,12 @@ onUnmounted(() => {
   gap: 6px;
   min-height: 36px;
   padding: 0 4px 0 8px;
-  color: #4b5563;
+  color: var(--text-secondary);
   border-radius: 7px;
 }
 
 .trash-row:hover {
-  background: #eef2f7;
+  background: var(--surface-hover);
 }
 
 .trash-row span {
@@ -872,7 +872,7 @@ onUnmounted(() => {
   min-width: 0;
   border: 0;
   outline: 0;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
 }
 

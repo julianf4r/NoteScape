@@ -130,7 +130,7 @@ function endResize() {
 .canvas-image {
   position: absolute;
   padding: 8px;
-  background: #fff;
+  background: var(--image-frame);
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 4px;
   box-shadow: 0 10px 18px rgba(0, 0, 0, 0.14), 0 2px 4px rgba(0, 0, 0, 0.08);
@@ -171,9 +171,9 @@ function endResize() {
   place-items: center;
   align-content: center;
   gap: 5px;
-  color: #64748b;
-  background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 10px, #eef2f7 10px, #eef2f7 20px);
-  border: 1px dashed #cbd5e1;
+  color: var(--text-secondary);
+  background: repeating-linear-gradient(45deg, var(--missing-a), var(--missing-a) 10px, var(--missing-b) 10px, var(--missing-b) 20px);
+  border: 1px dashed var(--border-color);
   border-radius: 3px;
   text-align: center;
 }
@@ -186,7 +186,7 @@ function endResize() {
 .missing-state small {
   max-width: calc(100% - 16px);
   overflow: hidden;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 11px;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -198,7 +198,7 @@ function endResize() {
   bottom: -7px;
   width: 14px;
   height: 14px;
-  background: #fff;
+  background: var(--surface-raised);
   border: 2px solid #3b82f6;
   border-radius: 50%;
   cursor: var(--cursor-resize-nwse);

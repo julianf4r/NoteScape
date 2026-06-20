@@ -22,6 +22,7 @@ const settingsStore = useSettingsStore();
 const feedbackStore = useFeedbackStore();
 const drawingStore = useDrawingStore();
 const imageStore = useImageStore();
+let systemThemeQuery: MediaQueryList | undefined;
 
 const noteTags = computed(() => noteStore.notes.flatMap((note) => note.tags));
 const globalMaxZ = computed(() =>
@@ -55,13 +56,26 @@ function onKeydown(event: KeyboardEvent) {
   }
 }
 
+function applyTheme() {
+  const requestedTheme = settingsStore.settings.theme;
+  const resolvedTheme = requestedTheme === "system"
+    ? (systemThemeQuery?.matches ? "dark" : "light")
+    : requestedTheme;
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.style.colorScheme = resolvedTheme;
+}
+
 onMounted(() => {
+  systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  systemThemeQuery.addEventListener("change", applyTheme);
+  applyTheme();
   appStore.load();
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("persistence-error", onPersistenceError);
 });
 
 onUnmounted(() => {
+  systemThemeQuery?.removeEventListener("change", applyTheme);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("persistence-error", onPersistenceError);
 });
@@ -76,6 +90,12 @@ watch(
   (tags) => {
     if (appStore.databaseReady) tagStore.recalculateCounts(tags);
   },
+  { immediate: true },
+);
+
+watch(
+  () => settingsStore.settings.theme,
+  applyTheme,
   { immediate: true },
 );
 </script>

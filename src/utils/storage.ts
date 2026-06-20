@@ -20,10 +20,11 @@ export const defaultSettings: AppSettings = {
 };
 
 export function normalizeSettings(settings?: Partial<AppSettings>): AppSettings {
+  const theme = settings?.theme;
   return {
     ...defaultSettings,
     ...settings,
-    theme: "light",
+    theme: theme === "dark" || theme === "system" ? theme : "light",
   };
 }
 

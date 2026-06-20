@@ -602,6 +602,15 @@ function resizeHandlePoint(drawing: DrawingItem) {
   filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.9));
 }
 
+:global(:root[data-theme="dark"]) .drawing-layer :deep(.drawing-stroke),
+:global(:root[data-theme="dark"]) .drawing-text-content {
+  filter: drop-shadow(0 0 1px rgba(235, 240, 237, 0.72));
+}
+
+:global(:root[data-theme="dark"]) .drawing-layer .selected:not(.arrow-drawing) :deep(.drawing-stroke) {
+  filter: drop-shadow(0 0 4px rgba(110, 168, 254, 0.95));
+}
+
 .edit-handle {
   pointer-events: all;
   cursor: var(--cursor-pointer);
@@ -613,7 +622,7 @@ function resizeHandlePoint(drawing: DrawingItem) {
 }
 
 .edit-handle-dot {
-  fill: #ffffff;
+  fill: var(--surface-raised);
   stroke: #2563eb;
   stroke-width: 2;
   vector-effect: non-scaling-stroke;

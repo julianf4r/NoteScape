@@ -724,8 +724,8 @@ mark {
 }
 
 .text-menu button.active {
-  color: #1d4ed8;
-  background: #e8f1ff;
+  color: var(--primary-text);
+  background: var(--primary-soft);
 }
 
 .text-menu {
@@ -733,8 +733,9 @@ mark {
   align-items: center;
   gap: 4px;
   padding: 5px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
   border-radius: 9px;
   box-shadow: var(--shadow-md);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -748,19 +749,19 @@ mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
   border-radius: 6px;
 }
 
 .text-menu button:hover {
-  background: #f1f5f9;
+  background: var(--surface-hover);
 }
 
 .text-menu span {
   width: 1px;
   height: 18px;
-  background: #e5e7eb;
+  background: var(--border-color);
 }
 
 .resize-handle {

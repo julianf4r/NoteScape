@@ -111,7 +111,7 @@ export interface TagItem {
 }
 
 export interface AppSettings {
-  theme: "light";
+  theme: "light" | "dark" | "system";
   defaultFontSize: number;
   showGrid: boolean;
   randomRotation: boolean;

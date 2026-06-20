@@ -34,24 +34,30 @@ const feedback = useFeedbackStore();
   align-items: center;
   gap: 8px;
   padding: 10px 10px 10px 12px;
-  color: #374151;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+  box-shadow: var(--shadow-lg);
   pointer-events: auto;
 }
 
 .toast.success {
-  color: #166534;
-  background: #dcfce7;
-  border-color: #bbf7d0;
+  color: #86efac;
+  background: #183d2a;
+  border-color: #286440;
 }
 
 .toast.error {
-  color: #991b1b;
-  background: #fee2e2;
-  border-color: #fecaca;
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+
+:global(:root[data-theme="light"]) .toast.success {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #bbf7d0;
 }
 
 button {

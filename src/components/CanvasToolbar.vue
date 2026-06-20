@@ -184,8 +184,8 @@ onBeforeUnmount(closeZoom);
   align-items: center;
   height: 50px;
   overflow: visible;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid #eceff3;
+  background: var(--panel-translucent);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
 }
@@ -196,13 +196,13 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: #374151;
+  color: var(--text-primary);
   background: transparent;
 }
 
 button:hover,
 button.active {
-  background: #f3f6fb;
+  background: var(--surface-active);
 }
 
 button:disabled {
@@ -229,7 +229,7 @@ button:disabled {
 }
 
 .draw-group.muted {
-  background: rgba(248, 250, 252, 0.62);
+  background: color-mix(in srgb, var(--surface-muted) 62%, transparent);
 }
 
 .draw-group.muted button:not(.active),
@@ -241,7 +241,7 @@ button:disabled {
 span {
   width: 1px;
   height: 50px;
-  background: #eeeeee;
+  background: var(--border-soft);
 }
 
 .zoom-menu {
@@ -267,8 +267,8 @@ span {
   z-index: 50;
   width: 88px;
   padding: 5px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   box-shadow: var(--shadow-md);
   transform: translateX(-50%);
@@ -283,8 +283,8 @@ span {
 }
 
 .zoom-options button.active {
-  color: #1d4ed8;
-  background: #e8f1ff;
+  color: var(--primary-text);
+  background: var(--primary-soft);
 }
 
 .drawing-color {
@@ -299,7 +299,7 @@ span {
   content: "";
   width: 20px;
   height: 20px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--border-color);
   border-radius: 50%;
   background: var(--drawing-color);
 }
@@ -317,8 +317,9 @@ span {
   width: 42px;
   height: 28px;
   margin: 0 2px;
-  color: #374151;
-  border: 1px solid #e5e7eb;
+  color: var(--text-primary);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   text-align: center;
   outline: 0;

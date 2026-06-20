@@ -141,6 +141,14 @@ function useDefaultImageLibrary() {
 
       <section>
         <h3>外观</h3>
+        <div class="setting-row">
+          <span>主题</span>
+          <div class="theme-segments" role="group" aria-label="主题">
+            <button :class="{ active: settings.theme === 'light' }" @click="settingsStore.updateSettings({ theme: 'light' })">浅色</button>
+            <button :class="{ active: settings.theme === 'dark' }" @click="settingsStore.updateSettings({ theme: 'dark' })">深色</button>
+            <button :class="{ active: settings.theme === 'system' }" @click="settingsStore.updateSettings({ theme: 'system' })">跟随系统</button>
+          </div>
+        </div>
         <label class="switch">
           <span>显示网格点</span>
           <input type="checkbox" :checked="settings.showGrid" @change="settingsStore.updateSettings({ showGrid: ($event.target as HTMLInputElement).checked })" />
@@ -215,10 +223,10 @@ function useDefaultImageLibrary() {
 .overlay {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 1500;
   display: flex;
   justify-content: flex-end;
-  background: rgba(15, 23, 42, 0.14);
+  background: var(--overlay);
 }
 
 :global(.settings-drawer-enter-active),
@@ -247,9 +255,10 @@ function useDefaultImageLibrary() {
   height: 100%;
   padding: 20px;
   overflow: auto;
-  background: #fff;
-  border-left: 1px solid #e5e7eb;
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.12);
+  color: var(--text-primary);
+  background: var(--surface);
+  border-left: 1px solid var(--border-color);
+  box-shadow: var(--shadow-lg);
 }
 
 header {
@@ -275,26 +284,32 @@ h3 {
 
 section {
   padding: 16px 0;
-  border-top: 1px solid #eef1f4;
+  border-top: 1px solid var(--border-soft);
 }
 
+.setting-row,
 label {
   display: grid;
   grid-template-columns: 1fr 140px;
   align-items: center;
   gap: 12px;
   min-height: 42px;
-  color: #374151;
+  color: var(--text-primary);
+}
+
+.setting-row {
+  grid-template-columns: 1fr 184px;
 }
 
 select,
 input[type="number"],
 input[type="text"] {
   width: 100%;
-  border: 1px solid #dfe3ea;
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
   border-radius: 7px;
   outline: 0;
-  background: #fff;
+  background: var(--surface-muted);
 }
 
 select,
@@ -312,6 +327,37 @@ input[type="text"] {
   justify-self: end;
   width: 18px;
   height: 18px;
+}
+
+.theme-segments {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 3px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.theme-segments button {
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  color: var(--text-secondary);
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.theme-segments button.active {
+  color: var(--primary-text);
+  background: var(--primary-soft);
+  box-shadow: var(--shadow-sm);
+}
+
+.theme-segments button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
 }
 
 .actions {
@@ -339,25 +385,25 @@ input[type="text"] {
   align-items: center;
   justify-content: center;
   gap: 5px;
-  color: #374151;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  color: var(--text-primary);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
   border-radius: 7px;
 }
 
 .actions button:disabled {
   cursor: var(--cursor-not-allowed);
-  color: #9ca3af;
-  background: #f3f4f6;
+  color: var(--text-muted);
+  background: var(--surface-muted);
 }
 
 .db-path {
   min-height: 38px;
   padding: 9px 10px;
   overflow-wrap: anywhere;
-  color: #4b5563;
-  background: #f8fafc;
-  border: 1px solid #e5e7eb;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
   border-radius: 7px;
   font-size: 12px;
   line-height: 1.45;
@@ -367,9 +413,9 @@ input[type="text"] {
 .load-error {
   margin: 0 0 10px;
   padding: 9px 10px;
-  color: #991b1b;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
+  color: var(--danger-text);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger-border);
   border-radius: 7px;
   font-size: 13px;
   line-height: 1.5;

@@ -47,7 +47,7 @@ watch(
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(31, 41, 55, 0.24);
+  background: var(--overlay);
   backdrop-filter: blur(2px);
 }
 
@@ -57,9 +57,9 @@ watch(
   grid-template-columns: 42px 1fr;
   gap: 14px;
   padding: 18px;
-  color: #1f2937;
-  background: #fffdf7;
-  border: 1px solid rgba(229, 231, 235, 0.92);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   box-shadow: 0 24px 58px rgba(15, 23, 42, 0.22), 0 4px 12px rgba(15, 23, 42, 0.1);
   outline: none;
@@ -92,7 +92,7 @@ watch(
 .confirm-content p {
   margin: 0;
   line-height: 1.6;
-  color: #4b5563;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -116,13 +116,13 @@ watch(
 }
 
 .confirm-actions .secondary {
-  color: #4b5563;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  color: var(--text-secondary);
+  background: var(--surface-muted);
+  border: 1px solid var(--border-color);
 }
 
 .confirm-actions .secondary:hover {
-  background: #e9edf2;
+  background: var(--surface-hover);
 }
 
 .confirm-actions .danger {
