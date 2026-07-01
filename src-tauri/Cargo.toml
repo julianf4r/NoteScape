@@ -1,6 +1,6 @@
 [package]
 name = "note-scape"
-version = "0.3.3"
+version = "0.3.4"
 description = "NoteScape sticky canvas"
 authors = ["Julian F."]
 edition = "2021"
