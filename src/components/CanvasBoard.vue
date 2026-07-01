@@ -986,11 +986,16 @@ function measureImageSize(src: string): Promise<{ width: number; height: number 
     }
     const image = new Image();
     image.onload = () => {
+      const minSize = 120;
       const maxSize = 420;
-      const ratio = Math.min(1, maxSize / Math.max(image.naturalWidth || maxSize, image.naturalHeight || maxSize));
+      const naturalWidth = image.naturalWidth || 280;
+      const naturalHeight = image.naturalHeight || 220;
+      const naturalMaxSize = Math.max(naturalWidth, naturalHeight);
+      const targetMaxSize = Math.min(maxSize, Math.max(minSize, naturalMaxSize));
+      const ratio = targetMaxSize / naturalMaxSize;
       resolve({
-        width: Math.max(120, Math.round((image.naturalWidth || 280) * ratio)),
-        height: Math.max(120, Math.round((image.naturalHeight || 220) * ratio)),
+        width: naturalWidth * ratio,
+        height: naturalHeight * ratio,
       });
     };
     image.onerror = () => resolve({ width: 320, height: 240 });

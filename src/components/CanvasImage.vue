@@ -129,6 +129,7 @@ function endResize() {
 <style scoped>
 .canvas-image {
   position: absolute;
+  box-sizing: content-box;
   padding: 8px;
   background: var(--image-frame);
   border: 1px solid rgba(15, 23, 42, 0.08);
@@ -155,7 +156,7 @@ function endResize() {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 2px;
   pointer-events: none;
 }
