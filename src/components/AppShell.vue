@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow, type Theme } from "@tauri-apps/api/window";
 import { computed, onMounted, onUnmounted, watch } from "vue";
 import CanvasBoard from "./CanvasBoard.vue";
 import ConfirmHost from "./ConfirmHost.vue";
@@ -23,6 +25,9 @@ const feedbackStore = useFeedbackStore();
 const drawingStore = useDrawingStore();
 const imageStore = useImageStore();
 let systemThemeQuery: MediaQueryList | undefined;
+let systemTheme: Theme = "light";
+let unlistenNativeTheme: (() => void) | undefined;
+let mounted = false;
 
 const noteTags = computed(() => noteStore.notes.flatMap((note) => note.tags));
 const globalMaxZ = computed(() =>
@@ -59,23 +64,56 @@ function onKeydown(event: KeyboardEvent) {
 function applyTheme() {
   const requestedTheme = settingsStore.settings.theme;
   const resolvedTheme = requestedTheme === "system"
-    ? (systemThemeQuery?.matches ? "dark" : "light")
+    ? systemTheme
     : requestedTheme;
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.style.colorScheme = resolvedTheme;
 }
 
-onMounted(() => {
-  systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  systemThemeQuery.addEventListener("change", applyTheme);
+function updateSystemTheme(theme: Theme) {
+  systemTheme = theme;
   applyTheme();
+}
+
+function onSystemThemeQueryChanged(event: MediaQueryListEvent) {
+  updateSystemTheme(event.matches ? "dark" : "light");
+}
+
+async function listenToNativeSystemTheme() {
+  if (!isTauri()) return;
+
+  try {
+    const appWindow = getCurrentWindow();
+    const unlisten = await appWindow.onThemeChanged(({ payload }) => updateSystemTheme(payload));
+    if (!mounted) {
+      unlisten();
+      return;
+    }
+    unlistenNativeTheme = unlisten;
+
+    const theme = await appWindow.theme();
+    if (mounted && theme) updateSystemTheme(theme);
+  } catch (error) {
+    console.warn("无法监听系统主题变化，将使用浏览器主题监听作为后备。", error);
+  }
+}
+
+onMounted(() => {
+  mounted = true;
+  systemThemeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  systemTheme = systemThemeQuery.matches ? "dark" : "light";
+  systemThemeQuery.addEventListener("change", onSystemThemeQueryChanged);
+  applyTheme();
+  void listenToNativeSystemTheme();
   appStore.load();
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("persistence-error", onPersistenceError);
 });
 
 onUnmounted(() => {
-  systemThemeQuery?.removeEventListener("change", applyTheme);
+  mounted = false;
+  unlistenNativeTheme?.();
+  systemThemeQuery?.removeEventListener("change", onSystemThemeQueryChanged);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("persistence-error", onPersistenceError);
 });
